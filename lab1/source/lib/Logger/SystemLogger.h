@@ -1,6 +1,6 @@
 #pragma once
 #include "Logger.h"
-#include "OnceInstaniated/OnceInstantiated.h"
+#include "OnceInstantiated/OnceInstantiated.h"
 
 class SystemLogger : public Logger, public OnceInstantiated<SystemLogger> {
     friend class OnceInstantiated;

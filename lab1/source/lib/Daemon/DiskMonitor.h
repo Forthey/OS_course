@@ -1,6 +1,6 @@
 #pragma once
 #include "Daemon.h"
-#include "OnceInstaniated/OnceInstantiated.h"
+#include "OnceInstantiated/OnceInstantiated.h"
 
 class DiskMonitor : public Daemon, public OnceInstantiated<DiskMonitor> {
     friend class OnceInstantiated;

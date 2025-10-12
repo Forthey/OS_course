@@ -2,7 +2,7 @@
 #include "Config.h"
 #include "ConfigLoader.h"
 #include "Logger/Logger.h"
-#include "OnceInstaniated/OnceInstantiated.h"
+#include "OnceInstantiated/OnceInstantiated.h"
 
 class YamlConfigLoader : public ConfigLoader<Config>, public OnceInstantiated<YamlConfigLoader> {
     friend class OnceInstantiated;
