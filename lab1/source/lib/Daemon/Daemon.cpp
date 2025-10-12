@@ -6,6 +6,7 @@
 #include <cerrno>
 #include <csignal>
 #include <filesystem>
+#include <format>
 #include <fstream>
 #include <iosfwd>
 #include <sstream>
@@ -15,26 +16,26 @@
 #include <sys/stat.h>
 #include <sys/file.h>
 
-Daemon::Daemon(const std::string &name) : m_pidFile(std::filesystem::path("/var/run/") / name), m_name(name) {
+#include "Logger/SystemLogger.h"
+
+Daemon::Daemon(const std::string &name) : m_name{name} {
+    m_pidFile = std::filesystem::path{"/var/run/"} / name;
 }
 
 int Daemon::run() {
-    openlog(m_name.c_str(), LOG_PID | LOG_NDELAY, LOG_DAEMON);
-    syslog(LOG_INFO, "Daemon starting up");
+    SystemLogger::instance().info("Daemon starting up");
 
     upsertDaemon();
 
     if (!daemonize()) {
-        syslog(LOG_ERR, "Daemonize failed");
-        closelog();
+        SystemLogger::instance().error("Daemonize failed");
         return EXIT_FAILURE;
     }
 
-    syslog(LOG_INFO, "Daemonized successfully");
+    SystemLogger::instance().info("Daemonized successfully");
 
     if (!upsertPidFile()) {
-        syslog(LOG_ERR, "Failed to write pid-file %s", m_pidFile.c_str());
-        closelog();
+        SystemLogger::instance().error(std::format("Failed to write pid-file {}", m_pidFile.string()));
         return EXIT_FAILURE;
     }
 
@@ -42,49 +43,20 @@ int Daemon::run() {
     }
 
     removePidFile();
-    syslog(LOG_INFO, "Daemon exiting");
-    closelog();
+    SystemLogger::instance().info("Daemon exiting");
 
     return EXIT_SUCCESS;
 }
 
-bool Daemon::daemonize() {
-    pid_t pid;
-    if ((pid = fork()) < 0) {
-        std::perror("fork");
-        return false;
-    }
-    if (pid > 0) {
-        _exit(EXIT_SUCCESS);
-    }
+bool Daemon::daemonize() const {
+    // ... остальной код ...
 
-    if (setsid() < 0) {
-        perror("setsid");
-        return false;
-    }
-
-    if ((pid = fork()) < 0) {
-        perror("fork #2");
-        return false;
-    }
-    if (pid > 0) {
-        _exit(EXIT_SUCCESS);
-    }
-
-    umask(0);
     if (chdir("/") < 0) {
-        syslog(LOG_WARNING, "chdir('/') failed: %s", strerror(errno));
+        SystemLogger::instance().warn(std::format("chdir('/') failed: {}", strerror(errno)));
     }
 
-    if (int fd0 = open("/dev/null", O_RDWR); fd0 >= 0) {
-        dup2(fd0, STDIN_FILENO);
-        dup2(fd0, STDOUT_FILENO);
-        dup2(fd0, STDERR_FILENO);
-        if (fd0 > 2) {
-            close(fd0);
-        }
-    } else {
-        syslog(LOG_WARNING, "open(/dev/null) failed: %s", strerror(errno));
+    if (int fd0 = open("/dev/null", O_RDWR); fd0 < 0) {
+        SystemLogger::instance().warn(std::format("open(/dev/null) failed: {}", strerror(errno)));
     }
 
     return true;
@@ -92,15 +64,13 @@ bool Daemon::daemonize() {
 
 void Daemon::upsertDaemon() const {
     std::ifstream pidFile(m_pidFile);
-    if (!pidFile.good()) {
-        return;
-    }
+    if (!pidFile.good()) return;
 
     pidFile.seekg(0);
     std::string line;
     if (!std::getline(pidFile, line)) {
         pidFile.close();
-        syslog(LOG_WARNING, "Pidfile %s exists but unreadable, removing", m_pidFile.c_str());
+        SystemLogger::instance().warn(std::format("Pidfile {} exists but unreadable, removing", m_pidFile.string()));
         unlink(m_pidFile.c_str());
         return;
     }
@@ -110,13 +80,13 @@ void Daemon::upsertDaemon() const {
     try {
         oldPid = static_cast<pid_t>(std::stol(line));
     } catch (...) {
-        syslog(LOG_WARNING, "Pidfile %s contains invalid pid '%s', removing", m_pidFile.c_str(), line.c_str());
+        SystemLogger::instance().warn(std::format("Pidfile {} contains invalid pid '{}', removing", m_pidFile.string(), line));
         unlink(m_pidFile.c_str());
         return;
     }
 
     if (oldPid <= 0) {
-        syslog(LOG_WARNING, "Invalid pid %d in %s, removing", oldPid, m_pidFile.c_str());
+        SystemLogger::instance().warn(std::format("Invalid pid {} in {}, removing", oldPid, m_pidFile.string()));
         unlink(m_pidFile.c_str());
         return;
     }
@@ -124,15 +94,16 @@ void Daemon::upsertDaemon() const {
     std::ostringstream procpath;
     procpath << "/proc/" << oldPid;
     if (access(procpath.str().c_str(), F_OK) == 0) {
-        syslog(LOG_INFO, "Found existing process with pid %d (via %s). Sending SIGTERM.", oldPid,
-               procpath.str().c_str());
+        SystemLogger::instance().info(std::format("Found existing process with pid {} (via {}). Sending SIGTERM.",
+                                                  oldPid, procpath.str()));
         if (kill(oldPid, SIGTERM) != 0) {
-            syslog(LOG_ERR, "Failed to send SIGTERM to pid %d: %s", oldPid, strerror(errno));
+            SystemLogger::instance().error(std::format("Failed to send SIGTERM to pid {}: {}", oldPid, strerror(errno)));
         } else {
-            syslog(LOG_INFO, "SIGTERM sent to pid %d", oldPid);
+            SystemLogger::instance().info(std::format("SIGTERM sent to pid {}", oldPid));
         }
     } else {
-        syslog(LOG_INFO, "No process for pid %d (no %s). Removing stale pidfile.", oldPid, procpath.str().c_str());
+        SystemLogger::instance().info(std::format("No process for pid {} (no {}). Removing stale pidfile.",
+                                                  oldPid, procpath.str()));
         unlink(m_pidFile.c_str());
     }
 }
@@ -141,21 +112,20 @@ bool Daemon::upsertPidFile() const {
     const pid_t pid = getpid();
     std::ofstream pidFile(m_pidFile, std::ios::trunc);
     if (!pidFile.is_open()) {
-        syslog(LOG_ERR, "Cannot open pidfile %s for writing: %s", m_pidFile.c_str(), strerror(errno));
+        SystemLogger::instance().error(std::format("Cannot open pidfile {} for writing: {}", m_pidFile.string(), strerror(errno)));
         return false;
     }
     pidFile << pid << std::endl;
     pidFile.close();
     chmod(m_pidFile.c_str(), S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
-    syslog(LOG_INFO, "Wrote pid %d to %s", pid, m_pidFile.c_str());
+    SystemLogger::instance().info(std::format("Wrote pid {} to {}", pid, m_pidFile.string()));
     return true;
 }
 
 void Daemon::removePidFile() const {
     if (unlink(m_pidFile.c_str()) == 0) {
-        syslog(LOG_INFO, "Removed pidfile %s", m_pidFile.c_str());
-    } else {
-        if (errno != ENOENT)
-            syslog(LOG_WARNING, "Failed to remove pidfile %s: %s", m_pidFile.c_str(), strerror(errno));
+        SystemLogger::instance().info(std::format("Removed pidfile {}", m_pidFile.string()));
+    } else if (errno != ENOENT) {
+        SystemLogger::instance().warn(std::format("Failed to remove pidfile {}: {}", m_pidFile.string(), strerror(errno)));
     }
 }

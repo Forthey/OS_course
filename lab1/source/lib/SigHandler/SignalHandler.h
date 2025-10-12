@@ -1,6 +1,6 @@
 #pragma once
 
-class SigHandler {
+class SignalHandler {
 public:
     static void handleSignal(int signal);
 };

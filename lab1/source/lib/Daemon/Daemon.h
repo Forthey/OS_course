@@ -1,5 +1,9 @@
 #pragma once
+#include <filesystem>
+#include <memory>
 #include <string>
+
+#include "Logger/Logger.h"
 
 class Daemon {
 public:
@@ -9,15 +13,16 @@ public:
 
     int run();
 protected:
-    explicit Daemon(const std::string &name);
+    Daemon(const std::string& name);
+
+    std::string m_name;
 private:
-    static bool daemonize();
+    bool daemonize() const;
     void upsertDaemon() const;
     bool upsertPidFile() const;
     void removePidFile() const;
 
     virtual bool onMainLoopStep() = 0;
 
-    std::string m_pidFile;
-    std::string m_name;
+    std::filesystem::path m_pidFile;
 };

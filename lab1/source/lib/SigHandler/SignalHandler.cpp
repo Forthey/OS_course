@@ -1,9 +1,9 @@
-#include "SigHandler.h"
+#include "SignalHandler.h"
 
 #include <csignal>
 #include <syslog.h>
 
-void SigHandler::handleSignal(int signal) {
+void SignalHandler::handleSignal(int signal) {
     switch (signal) {
         case SIGHUP:
             // TODO reload config из синглтона

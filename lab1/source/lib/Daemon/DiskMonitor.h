@@ -5,7 +5,7 @@
 class DiskMonitor : public Daemon, public OnceInstantiated<DiskMonitor> {
     friend class OnceInstantiated;
 protected:
-    explicit DiskMonitor(std::string configPath = "");
+    DiskMonitor(const std::string& name, const std::string& configPath);
 
 private:
     bool onMainLoopStep() override;

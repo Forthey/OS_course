@@ -1,11 +1,13 @@
 #include "DiskMonitor.h"
 
-#include <sys/syslog.h>
+#include "Logger/SystemLogger.h"
 
-DiskMonitor::DiskMonitor(std::string configPath) : Daemon("disk_monitor") {
+DiskMonitor::DiskMonitor(const std::string &name,
+                         const std::string &configPath) : Daemon{name} {
 }
 
 bool DiskMonitor::onMainLoopStep() {
-    syslog(LOG_INFO, "Working...");
+    SystemLogger::instance().info("Working...");
+    sleep(1);
     return true;
 }
