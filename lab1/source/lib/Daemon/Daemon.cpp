@@ -26,11 +26,12 @@ void Daemon::stop() {
     m_shouldBeStopped = true;
 }
 
-Daemon::Daemon(const std::string &name, bool isDebugMode) : m_name{name}, m_shouldBeStopped{false}, m_isDebugMode {isDebugMode} {
+Daemon::Daemon(const std::string &name, bool isDebugMode) : m_name{name}, m_shouldBeStopped{false},
+                                                            m_isDebugMode{isDebugMode} {
     m_pidFile = std::filesystem::path{"/var/run/"} / name;
 }
 
-int Daemon::run() {
+int Daemon::run(std::function<void()>&& onDaemonized) {
     SystemLogger::instance().info("Daemon starting up");
 
     if (!m_isDebugMode) {
@@ -48,6 +49,8 @@ int Daemon::run() {
             return EXIT_FAILURE;
         }
     }
+
+    onDaemonized();
 
     while (!m_shouldBeStopped) {
         std::chrono::milliseconds delay = onMainLoopStep();

@@ -10,16 +10,29 @@
 /// Если задана, программа будет запускаться как программа, а не как демон
 // #define DEBUG_MOD
 
-void createSingletons(const std::filesystem::path& configPath) {
+void onDaemonized() {
+    DirectoriesWatcher::create();
+    DirectoriesWatcher::instance().attach(&DiskMonitor::instance());
+    SignalHandler::instance().attach(&DiskMonitor::instance());
+
+    DiskMonitor::instance().put(std::make_shared<ReloadConfigRequest>());
+}
+
+bool runDaemon(const std::filesystem::path &configPath) {
     const std::string name = "disk_monitor";
     SystemLogger::create(name);
-    DirectoriesWatcher::create();
     SignalHandler::create();
+
 #ifndef DEBUG_MOD
     DiskMonitor::create(name, configPath, std::make_shared<YamlConfigLoader>());
 #else
     DiskMonitor::create(name, configPath, std::make_shared<YamlConfigLoader>(), true);
 #endif // DEBUG_MOD
+    if (!DiskMonitor::instance().run(onDaemonized)) {
+        std::cerr << "Failed to run disk monitor" << std::endl;
+        return EXIT_FAILURE;
+    }
+    return EXIT_SUCCESS;
 }
 
 void deleteSingletons() {
@@ -35,9 +48,8 @@ int main(int argc, char *argv[]) {
         return EXIT_FAILURE;
     }
     std::filesystem::path configPath = argc == 2 ? argv[1] : "config.yaml";
-    createSingletons(std::filesystem::absolute(configPath));
-    if (!DiskMonitor::instance().run()) {
-        std::cerr << "Failed to run disk monitor" << std::endl;
+    if (!runDaemon(std::filesystem::absolute(configPath))) {
+        deleteSingletons();
         return EXIT_FAILURE;
     }
     deleteSingletons();

@@ -1,6 +1,7 @@
 #pragma once
 #include <atomic>
 #include <filesystem>
+#include <functional>
 #include <memory>
 #include <string>
 
@@ -12,7 +13,7 @@ public:
 
     virtual ~Daemon() = default;
 
-    int run();
+    int run(std::function<void()>&& onDaemonized);
 
     virtual void reloadConfig() = 0;
 

@@ -21,19 +21,21 @@ std::shared_ptr<Config> YamlConfigLoader::loadData(const std::filesystem::path &
             std::filesystem::path directory = entry.as<std::string>();
 
             if (!std::filesystem::exists(directory)) {
-                SystemLogger::instance().warn(std::format("Directory {} in file {} does not exist. Is the path relative?",
-                                          directory.string(), filePath.string()));
+                SystemLogger::instance().warn(std::format(
+                    "Directory {} in file {} does not exist. Is the path relative?",
+                    directory.string(), filePath.string()));
                 continue;
             }
             if (!std::filesystem::is_directory(directory)) {
-                SystemLogger::instance().warn(std::format("{} in file {} is not a directory", directory.string(), filePath.string()));
+                SystemLogger::instance().warn(std::format("{} in file {} is not a directory", directory.string(),
+                                                          filePath.string()));
                 continue;
             }
             if (directory.is_relative()) {
                 directory = std::filesystem::absolute(directory);
                 SystemLogger::instance().warn(std::format(
-                                  "Directory {} in file {} is specified via relative path. This will work once but not on config reload",
-                                  directory.string(), filePath.string()));
+                    "Directory {} in file {} is specified via relative path. This will work once but not on config reload",
+                    directory.string(), filePath.string()));
             }
 
             config->directories.emplace_back(std::move(directory));
@@ -45,7 +47,8 @@ std::shared_ptr<Config> YamlConfigLoader::loadData(const std::filesystem::path &
     } catch (const YAML::ParserException &e) {
         SystemLogger::instance().error(std::format("Could not parse file {}. Error: {}", filePath.string(), e.what()));
     } catch (const YAML::InvalidNode &e) {
-        SystemLogger::instance().error(std::format("Some node in file {} is invalid. Error: {}", filePath.string(), e.what()));
+        SystemLogger::instance().error(std::format("Some node in file {} is invalid. Error: {}", filePath.string(),
+                                                   e.what()));
     }
 
     return nullptr;

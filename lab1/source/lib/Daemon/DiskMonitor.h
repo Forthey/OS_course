@@ -25,7 +25,7 @@ public:
     void put(std::shared_ptr<Message> message) override;
 
 private:
-    static void handleFileChangedInd(const std::shared_ptr<FileChangedInd>& message);
+    static void handleFileChangedInd(const std::shared_ptr<FileChangedInd> &message);
 
     std::shared_ptr<Config> m_config;
     const std::filesystem::path m_configPath;

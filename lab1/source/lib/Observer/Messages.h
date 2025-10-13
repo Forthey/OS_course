@@ -1,5 +1,6 @@
 #pragma once
 #include <string>
+#include <filesystem>
 
 #include "Observer/Message.h"
 
@@ -11,13 +12,19 @@ public:
         MODIFIED,
     };
 
-    explicit FileChangedInd(std::string fileName, Action action) : fileName(std::move(fileName)), action(action) {
+    explicit FileChangedInd(std::filesystem::path directory, std::string fileName,
+                            Action action) : directory(std::move(directory)),
+                                             fileName(std::move(fileName)),
+                                             action(action) {
     }
 
+    std::filesystem::path directory;
     std::string const fileName;
     Action action;
 };
 
-class ReloadConfigRequest : public Message {};
+class ReloadConfigRequest : public Message {
+};
 
-class StopRequest : public Message {};
+class StopRequest : public Message {
+};

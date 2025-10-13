@@ -22,7 +22,7 @@ protected:
 
 template<typename Container>
 void Subject<Container>::attach(Observer *observer) {
-    if constexpr (std::is_same_v<Container, std::vector<Observer*> >) {
+    if constexpr (std::is_same_v<Container, std::vector<Observer *> >) {
         if (std::find(m_observers.begin(), m_observers.end(), observer) == m_observers.end()) {
             m_observers.push_back(observer);
         }
@@ -31,7 +31,7 @@ void Subject<Container>::attach(Observer *observer) {
 
 template<typename Container>
 void Subject<Container>::detach(Observer *observer) {
-    if constexpr (std::is_same_v<Container, std::vector<Observer* > >) {
+    if constexpr (std::is_same_v<Container, std::vector<Observer *> >) {
         std::erase(m_observers, observer);
     }
 }

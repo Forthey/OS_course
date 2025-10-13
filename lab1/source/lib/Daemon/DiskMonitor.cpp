@@ -6,9 +6,8 @@
 #include <utility>
 
 #include "DirectoriesWatcher/DirectoriesWatcher.h"
-#include "../Observer/Messages.h"
+#include "Observer/Messages.h"
 #include "Logger/SystemLogger.h"
-#include "SignalHandler/SignalHandler.h"
 
 using namespace std::chrono_literals;
 
@@ -17,9 +16,6 @@ DiskMonitor::DiskMonitor(const std::string &name, std::filesystem::path configPa
                          const bool isDebugMode) : Daemon{name, isDebugMode},
                                                    m_configPath{std::move(configPath)},
                                                    m_configLoader{std::move(configLoader)} {
-    DiskMonitor::reloadConfig();
-    DirectoriesWatcher::instance().attach(this);
-    SignalHandler::instance().attach(this);
 }
 
 std::chrono::milliseconds DiskMonitor::onMainLoopStep() {
@@ -55,15 +51,28 @@ void DiskMonitor::put(std::shared_ptr<Message> message) {
 }
 
 void DiskMonitor::handleFileChangedInd(const std::shared_ptr<FileChangedInd> &message) {
+    std::string strAction;
+    std::string type;
+
+    if (std::filesystem::is_directory(message->directory / message->fileName)) {
+        type = "directory";
+    } else {
+        type = "file";
+    }
+
     switch (message->action) {
         case FileChangedInd::Action::CREATED:
-            SystemLogger::instance().info(std::format("Created file {}", message->fileName), SystemLogger::LOCAL0);
+            strAction = "Created";
             break;
         case FileChangedInd::Action::DELETED:
-            SystemLogger::instance().info(std::format("Deleted file {}", message->fileName), SystemLogger::LOCAL0);
+            strAction = "Deleted";
             break;
         case FileChangedInd::Action::MODIFIED:
-            SystemLogger::instance().info(std::format("Modified file {}", message->fileName), SystemLogger::LOCAL0);
+            strAction = "Modified";
             break;
     }
+
+    SystemLogger::instance().info(std::format("{} {} {} in directory {}",
+                                              strAction, type, message->fileName, message->directory.string()),
+                                  SystemLogger::LOCAL0);
 }

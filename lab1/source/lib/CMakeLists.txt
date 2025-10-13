@@ -1,6 +1,6 @@
 file(GLOB_RECURSE PROJECT_SOURCE_FILES CONFIGURE_DEPENDS *.cpp *.h)
 
-add_library(lib_${PROJECT_NAME} SHARED ${PROJECT_SOURCE_FILES})
+add_library(lib_${PROJECT_NAME} STATIC ${PROJECT_SOURCE_FILES})
 
 target_include_directories(lib_${PROJECT_NAME} PRIVATE ./)
 

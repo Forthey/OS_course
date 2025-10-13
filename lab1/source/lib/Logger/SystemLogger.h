@@ -4,6 +4,7 @@
 
 class SystemLogger : public Logger, public OnceInstantiated<SystemLogger> {
     friend class OnceInstantiated;
+
 public:
     enum Facility {
         SYSTEM,
@@ -24,6 +25,7 @@ public:
 
     using Logger::error;
     void error(const std::string &message) { log(ERROR, message); }
+
 protected:
     explicit SystemLogger(std::string name);
 

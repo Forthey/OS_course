@@ -2,6 +2,7 @@
 
 #include <cstring>
 #include <format>
+#include <memory>
 #include <ranges>
 #include <sys/inotify.h>
 #include <sys/epoll.h>
@@ -15,7 +16,7 @@ namespace {
             return FileChangedInd::Action::MODIFIED;
         }
         if (mask & IN_DELETE) {
-            return FileChangedInd::Action::CREATED;
+            return FileChangedInd::Action::DELETED;
         }
         return FileChangedInd::Action::CREATED;
     }
@@ -34,7 +35,6 @@ DirectoriesWatcher::DirectoriesWatcher() {
         return;
     }
 
-    // Создаём epoll
     m_epollFd = epoll_create1(0);
     if (m_epollFd < 0) {
         perror("epoll_create1");
@@ -82,7 +82,7 @@ void DirectoriesWatcher::watchLoop() {
     epoll_event events[MAX_EVENTS];
 
     while (m_running) {
-        const int n = epoll_wait(m_epollFd, events, MAX_EVENTS, 500); // 500ms таймаут
+        const int n = epoll_wait(m_epollFd, events, MAX_EVENTS, 500);
         if (n < 0 && errno != EINTR) {
             perror("epoll_wait");
             break;
@@ -104,10 +104,8 @@ void DirectoriesWatcher::watchLoop() {
                     auto *eventPtr = reinterpret_cast<inotify_event *>(buffer + offset);
                     if (eventPtr->len) {
                         const std::string file{eventPtr->name};
-                        const auto path = m_watchDescriptors[eventPtr->wd];
-                        notify(std::shared_ptr<FileChangedInd>{
-                            new FileChangedInd{file, getActionByMask(eventPtr->mask)}
-                        });
+                        const auto directoryPath = m_watchDescriptors[eventPtr->wd];
+                        notify(std::make_shared<FileChangedInd>(directoryPath, file, getActionByMask(eventPtr->mask)));
                     }
                     offset += sizeof(inotify_event) + eventPtr->len;
                 }
