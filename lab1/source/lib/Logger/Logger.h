@@ -11,11 +11,11 @@ public:
         ERROR
     };
 
-    virtual void log(LogLevel level, const std::string& message) = 0;
+    virtual void log(LogLevel level, const std::string &message, int scope) = 0;
 
-    virtual void info(const std::string& message) { log(INFO, message); }
+    virtual void info(const std::string &message, int scope) { log(INFO, message, scope); }
 
-    virtual void warn(const std::string& message) { log(WARNING, message); }
+    virtual void warn(const std::string &message, int scope) { log(WARNING, message, scope); }
 
-    virtual void error(const std::string& message) { log(ERROR, message); }
+    virtual void error(const std::string &message, int scope) { log(ERROR, message, scope); }
 };

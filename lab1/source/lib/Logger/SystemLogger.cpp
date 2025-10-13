@@ -2,14 +2,11 @@
 
 #include <sys/syslog.h>
 
-std::string SystemLogger::m_name;
-
-SystemLogger::SystemLogger(const std::string &name) {
-    m_name = name;
+SystemLogger::SystemLogger(std::string name) : m_name{std::move(name)} {
     openlog(m_name.c_str(), LOG_PID | LOG_NDELAY, LOG_DAEMON);
 }
 
-void SystemLogger::log(LogLevel level, const std::string &message) {
+void SystemLogger::log(const LogLevel level, const std::string &message, const int scope) {
     int priority;
     switch (level) {
         case INFO:
@@ -25,5 +22,22 @@ void SystemLogger::log(LogLevel level, const std::string &message) {
             priority = LOG_DEBUG;
             break;
     }
-    syslog(priority, "%s", message.c_str());
+
+    int priorityScoped;
+    switch (scope) {
+        case SystemLogger::SYSTEM:
+            priorityScoped = priority | LOG_DAEMON;
+            break;
+        case SystemLogger::LOCAL0:
+            priorityScoped = priority | LOG_LOCAL0;
+            break;
+        default:
+            priorityScoped = priority | LOG_DAEMON;
+            break;
+    }
+    syslog(priorityScoped, "%s", message.c_str());
+}
+
+SystemLogger::~SystemLogger() {
+    closelog();
 }

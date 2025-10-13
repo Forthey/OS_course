@@ -1,28 +1,40 @@
 #pragma once
+#include <atomic>
 #include <filesystem>
 #include <memory>
 #include <string>
 
-#include "Logger/Logger.h"
-
 class Daemon {
 public:
-    Daemon(const Daemon&) = delete;
-    Daemon& operator=(const Daemon&) = delete;
+    Daemon(const Daemon &) = delete;
+
+    Daemon &operator=(const Daemon &) = delete;
+
     virtual ~Daemon() = default;
 
     int run();
+
+    virtual void reloadConfig() = 0;
+
+    virtual void stop();
+
 protected:
-    Daemon(const std::string& name);
+    explicit Daemon(const std::string &name, bool isDebugMode);
 
     std::string m_name;
+
 private:
     bool daemonize() const;
+
     void upsertDaemon() const;
+
     bool upsertPidFile() const;
+
     void removePidFile() const;
 
-    virtual bool onMainLoopStep() = 0;
+    virtual std::chrono::milliseconds onMainLoopStep() = 0;
 
+    std::atomic<bool> m_shouldBeStopped;
     std::filesystem::path m_pidFile;
+    bool m_isDebugMode;
 };

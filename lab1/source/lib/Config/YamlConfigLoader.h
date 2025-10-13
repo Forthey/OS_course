@@ -4,13 +4,12 @@
 #include "Logger/Logger.h"
 #include "OnceInstantiated/OnceInstantiated.h"
 
-class YamlConfigLoader : public ConfigLoader<Config>, public OnceInstantiated<YamlConfigLoader> {
-    friend class OnceInstantiated;
+class YamlConfigLoader : public ConfigLoader<Config> {
 public:
-    std::shared_ptr<Config> loadData(const std::string& filename) override;
+    explicit YamlConfigLoader(Logger &logger);
 
-protected:
-    explicit YamlConfigLoader(Logger& logger);
+    std::shared_ptr<Config> loadData(const std::filesystem::path &filename) override;
+
 private:
-    Logger& m_logger;
+    Logger &m_logger;
 };
