@@ -6,10 +6,6 @@
 
 #include "Logger/SystemLogger.h"
 
-YamlConfigLoader::YamlConfigLoader(Logger &logger)
-    : m_logger{logger} {
-}
-
 std::shared_ptr<Config> YamlConfigLoader::loadData(const std::filesystem::path &filePath) {
     try {
         YAML::Node yamlConfig = YAML::LoadFile(filePath);
@@ -17,8 +13,7 @@ std::shared_ptr<Config> YamlConfigLoader::loadData(const std::filesystem::path &
         auto config = std::make_shared<Config>();
 
         if (!yamlConfig["directories"]) {
-            m_logger.error(std::format("Could not find \"directories\" in {}", filePath.string()),
-                           SystemLogger::SYSTEM);
+            SystemLogger::instance().error(std::format("Could not find \"directories\" in {}", filePath.string()));
             return nullptr;
         }
 
@@ -26,20 +21,19 @@ std::shared_ptr<Config> YamlConfigLoader::loadData(const std::filesystem::path &
             std::filesystem::path directory = entry.as<std::string>();
 
             if (!std::filesystem::exists(directory)) {
-                m_logger.warn(std::format("Directory {} in file {} does not exist. Is the path relative?",
-                                          directory.string(), filePath.string()), SystemLogger::SYSTEM);
+                SystemLogger::instance().warn(std::format("Directory {} in file {} does not exist. Is the path relative?",
+                                          directory.string(), filePath.string()));
                 continue;
             }
             if (!std::filesystem::is_directory(directory)) {
-                m_logger.warn(std::format("{} in file {} is not a directory", directory.string(), filePath.string()),
-                              SystemLogger::SYSTEM);
+                SystemLogger::instance().warn(std::format("{} in file {} is not a directory", directory.string(), filePath.string()));
                 continue;
             }
             if (directory.is_relative()) {
                 directory = std::filesystem::absolute(directory);
-                m_logger.warn(std::format(
+                SystemLogger::instance().warn(std::format(
                                   "Directory {} in file {} is specified via relative path. This will work once but not on config reload",
-                                  directory.string(), filePath.string()), SystemLogger::SYSTEM);
+                                  directory.string(), filePath.string()));
             }
 
             config->directories.emplace_back(std::move(directory));
@@ -47,14 +41,11 @@ std::shared_ptr<Config> YamlConfigLoader::loadData(const std::filesystem::path &
 
         return config;
     } catch (const YAML::BadFile &e) {
-        m_logger.error(std::format("Could not load file {}. Error: {}", filePath.string(), e.what()),
-                       SystemLogger::SYSTEM);
+        SystemLogger::instance().error(std::format("Could not load file {}. Error: {}", filePath.string(), e.what()));
     } catch (const YAML::ParserException &e) {
-        m_logger.error(std::format("Could not parse file {}. Error: {}", filePath.string(), e.what()),
-                       SystemLogger::SYSTEM);
+        SystemLogger::instance().error(std::format("Could not parse file {}. Error: {}", filePath.string(), e.what()));
     } catch (const YAML::InvalidNode &e) {
-        m_logger.error(std::format("Some node in file {} is invalid. Error: {}", filePath.string(), e.what()),
-                       SystemLogger::SYSTEM);
+        SystemLogger::instance().error(std::format("Some node in file {} is invalid. Error: {}", filePath.string(), e.what()));
     }
 
     return nullptr;

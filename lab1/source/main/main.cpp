@@ -15,12 +15,10 @@ void createSingletons(const std::filesystem::path& configPath) {
     SystemLogger::create(name);
     DirectoriesWatcher::create();
     SignalHandler::create();
-    // На всякий случай уточню: конфиги могут писать в другие логи, по Daemon всегда должен писать в syslog
-    // Поэтому в Yaml... передаю логгер как аргумент, а в DiskMonitor пользуюсь синглтоном напрямую
 #ifndef DEBUG_MOD
-    DiskMonitor::create(name, configPath, std::make_shared<YamlConfigLoader>(SystemLogger::instance()));
+    DiskMonitor::create(name, configPath, std::make_shared<YamlConfigLoader>());
 #else
-    DiskMonitor::create(name, configPath, std::make_shared<YamlConfigLoader>(SystemLogger::instance()), true);
+    DiskMonitor::create(name, configPath, std::make_shared<YamlConfigLoader>(), true);
 #endif // DEBUG_MOD
 }
 
