@@ -1,0 +1,111 @@
+#include "Conn_Mq.h"
+
+#include <mqueue.h>
+#include <system_error>
+#include <cerrno>
+
+ConnMq::ConnMq(bool isHost, std::string inQueueName, std::string outQueueName, std::uint64_t connId, size_t messageSize)
+    : m_isHost{isHost}
+    , m_inQueueName{std::move(inQueueName)}
+    , m_outQueueName{std::move(outQueueName)}
+    , m_connId{connId}
+    , m_messageSize{messageSize}
+{
+    mq_attr attr{};
+    attr.mq_maxmsg = 10;
+    attr.mq_msgsize = m_messageSize;
+
+    // Открываем входную очередь в неблокирующем режиме
+    m_inQueue = mq_open(
+        m_inQueueName.c_str(),
+        O_CREAT | O_RDONLY | O_NONBLOCK,
+        0666,
+        &attr
+    );
+    if (m_inQueue == static_cast<mqd_t>(-1)) {
+        int saved = errno;
+        if (m_isHost) {
+            mq_unlink(m_inQueueName.c_str());
+            mq_unlink(m_outQueueName.c_str());
+        }
+        throw std::system_error(saved, std::generic_category(), "mq_open(in) failed");
+    }
+
+    // Открываем выходную очередь в неблокирующем режиме
+    m_outQueue = mq_open(
+        m_outQueueName.c_str(),
+        O_CREAT | O_WRONLY | O_NONBLOCK,
+        0666,
+        &attr
+    );
+    if (m_outQueue == static_cast<mqd_t>(-1)) {
+        int saved = errno;
+        mq_close(m_inQueue);
+        if (m_isHost) {
+            mq_unlink(m_inQueueName.c_str());
+            mq_unlink(m_outQueueName.c_str());
+        }
+        throw std::system_error(saved, std::generic_category(), "mq_open(out) failed");
+    }
+}
+
+ConnMq::~ConnMq() {
+    if (m_inQueue != static_cast<mqd_t>(-1)) {
+        mq_close(m_inQueue);
+    }
+    if (m_outQueue != static_cast<mqd_t>(-1)) {
+        mq_close(m_outQueue);
+    }
+    if (m_isHost) {
+        mq_unlink(m_inQueueName.c_str());
+        mq_unlink(m_outQueueName.c_str());
+    }
+}
+
+std::expected<BufferType, ConnReadError> ConnMq::read() {
+    if (bufferMaxSize < m_messageSize) {
+        return std::unexpected{ConnReadError::TryReadError};
+    }
+
+    BufferType buffer;
+    buffer.resize(bufferMaxSize);
+
+    const ssize_t readNumber =
+        mq_receive(m_inQueue, static_cast<char*>(buffer.data()), bufferMaxSize, nullptr);
+
+    if (readNumber < 0) {
+        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+            return std::unexpected{ConnReadError::NoData};
+        }
+        return std::unexpected{ConnReadError::TryReadError};
+    }
+
+    if (readNumber == 0) {
+        return std::unexpected{ConnReadError::Closed};
+    }
+
+    buffer.resize(static_cast<size_t>(readNumber));
+    return buffer;
+}
+
+ConnWriteResult ConnMq::write(const BufferType& buffer) {
+    if (buffer.size() > m_messageSize) {
+        return ConnWriteResult::WriteError;
+    }
+
+    const int rc = mq_send(
+        m_outQueue,
+        static_cast<const char*>(buffer.data()),
+        buffer.size(),
+        0
+    );
+
+    if (rc == -1) {
+        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+            return ConnWriteResult::TemporaryNotReady;
+        }
+        return ConnWriteResult::WriteError;
+    }
+
+    return ConnWriteResult::Success;
+}
