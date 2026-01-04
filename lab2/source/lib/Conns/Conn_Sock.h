@@ -1,13 +1,13 @@
 #pragma once
-#include "Conn.h"
-
+#include <poll.h>
 #include <sys/socket.h>
 #include <unistd.h>
-#include <poll.h>
+
+#include "Conn.h"
 
 class Conn_Sock : public Conn {
 public:
-    Conn_Sock(const std::string& socketPath, int connId);
+    Conn_Sock(bool isHost, int connId, std::string socketPath);
 
     ~Conn_Sock() override;
 
@@ -18,8 +18,14 @@ public:
     IdType connId() const override { return m_connId; }
 
 private:
-    int m_sockFd;
+    bool tryAccept();
+
+    bool m_isHost;
     int m_connId;
+
+    int m_sockFd;
+    int m_listenFd;
+    std::string m_socketPath;
 
     bool m_readInProgress{false};
     std::uint32_t m_lengthNetOrder{0};

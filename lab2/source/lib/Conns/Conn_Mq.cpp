@@ -1,27 +1,22 @@
 #include "Conn_Mq.h"
 
 #include <mqueue.h>
-#include <system_error>
-#include <cerrno>
 
-ConnMq::ConnMq(bool isHost, std::string inQueueName, std::string outQueueName, std::uint64_t connId, size_t messageSize)
+#include <cerrno>
+#include <iostream>
+#include <system_error>
+
+Conn_Mq::Conn_Mq(bool isHost, std::uint64_t connId, std::string inQueueName, std::string outQueueName)
     : m_isHost{isHost}
-    , m_inQueueName{std::move(inQueueName)}
-    , m_outQueueName{std::move(outQueueName)}
     , m_connId{connId}
-    , m_messageSize{messageSize}
-{
+    , m_inQueueName{std::move(inQueueName)}
+    , m_outQueueName{std::move(outQueueName)} {
     mq_attr attr{};
     attr.mq_maxmsg = 10;
-    attr.mq_msgsize = m_messageSize;
+    attr.mq_msgsize = bufferMaxSize;
 
     // Открываем входную очередь в неблокирующем режиме
-    m_inQueue = mq_open(
-        m_inQueueName.c_str(),
-        O_CREAT | O_RDONLY | O_NONBLOCK,
-        0666,
-        &attr
-    );
+    m_inQueue = mq_open(m_inQueueName.c_str(), O_CREAT | O_RDONLY | O_NONBLOCK, 0666, &attr);
     if (m_inQueue == static_cast<mqd_t>(-1)) {
         int saved = errno;
         if (m_isHost) {
@@ -32,12 +27,7 @@ ConnMq::ConnMq(bool isHost, std::string inQueueName, std::string outQueueName, s
     }
 
     // Открываем выходную очередь в неблокирующем режиме
-    m_outQueue = mq_open(
-        m_outQueueName.c_str(),
-        O_CREAT | O_WRONLY | O_NONBLOCK,
-        0666,
-        &attr
-    );
+    m_outQueue = mq_open(m_outQueueName.c_str(), O_CREAT | O_WRONLY | O_NONBLOCK, 0666, &attr);
     if (m_outQueue == static_cast<mqd_t>(-1)) {
         int saved = errno;
         mq_close(m_inQueue);
@@ -49,7 +39,7 @@ ConnMq::ConnMq(bool isHost, std::string inQueueName, std::string outQueueName, s
     }
 }
 
-ConnMq::~ConnMq() {
+Conn_Mq::~Conn_Mq() {
     if (m_inQueue != static_cast<mqd_t>(-1)) {
         mq_close(m_inQueue);
     }
@@ -57,21 +47,17 @@ ConnMq::~ConnMq() {
         mq_close(m_outQueue);
     }
     if (m_isHost) {
+        std::cout << "Closing Message Queue connection for id " << m_connId << std::endl;
         mq_unlink(m_inQueueName.c_str());
         mq_unlink(m_outQueueName.c_str());
     }
 }
 
-std::expected<BufferType, ConnReadError> ConnMq::read() {
-    if (bufferMaxSize < m_messageSize) {
-        return std::unexpected{ConnReadError::TryReadError};
-    }
-
+std::expected<BufferType, ConnReadError> Conn_Mq::read() {
     BufferType buffer;
     buffer.resize(bufferMaxSize);
 
-    const ssize_t readNumber =
-        mq_receive(m_inQueue, static_cast<char*>(buffer.data()), bufferMaxSize, nullptr);
+    const ssize_t readNumber = mq_receive(m_inQueue, static_cast<char*>(buffer.data()), bufferMaxSize, nullptr);
 
     if (readNumber < 0) {
         if (errno == EAGAIN || errno == EWOULDBLOCK) {
@@ -88,17 +74,8 @@ std::expected<BufferType, ConnReadError> ConnMq::read() {
     return buffer;
 }
 
-ConnWriteResult ConnMq::write(const BufferType& buffer) {
-    if (buffer.size() > m_messageSize) {
-        return ConnWriteResult::WriteError;
-    }
-
-    const int rc = mq_send(
-        m_outQueue,
-        static_cast<const char*>(buffer.data()),
-        buffer.size(),
-        0
-    );
+ConnWriteResult Conn_Mq::write(const BufferType& buffer) {
+    const int rc = mq_send(m_outQueue, static_cast<const char*>(buffer.data()), buffer.size(), 0);
 
     if (rc == -1) {
         if (errno == EAGAIN || errno == EWOULDBLOCK) {

@@ -4,6 +4,8 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include <iostream>
+
 Conn_Fifo::Conn_Fifo(bool isHost, int connId, std::string fifoReadPath, std::string fifoWritePath)
     : m_isHost{isHost}
     , m_connId{connId}
@@ -29,7 +31,9 @@ Conn_Fifo::Conn_Fifo(bool isHost, int connId, std::string fifoReadPath, std::str
         throw std::system_error(saved, std::generic_category(), "open(read) failed");
     }
 
-    m_writeFd = open(m_fifoWritePath.c_str(), O_WRONLY | O_NONBLOCK);
+    const auto flag = isHost ? O_RDWR : O_WRONLY;
+
+    m_writeFd = open(m_fifoWritePath.c_str(), flag | O_NONBLOCK);
     if (m_writeFd < 0) {
         int saved = errno;
         close(m_readFd);
@@ -50,6 +54,7 @@ Conn_Fifo::~Conn_Fifo() {
     }
 
     if (m_isHost) {
+        std::cout << "Closing Fifo connection for id " << m_connId << std::endl;
         unlink(m_fifoReadPath.c_str());
         unlink(m_fifoWritePath.c_str());
     }

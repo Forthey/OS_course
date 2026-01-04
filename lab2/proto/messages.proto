@@ -4,24 +4,14 @@ package chat;
 
 import "google/protobuf/timestamp.proto";
 
-enum MessageType {
-  MESSAGE_TYPE_UNSPECIFIED   = 0;
-  MESSAGE_TYPE_CHAT_BROADCAST = 1;
-  MESSAGE_TYPE_CHAT_PRIVATE   = 2;
-  MESSAGE_TYPE_SYSTEM_JOIN    = 3;
-  MESSAGE_TYPE_SYSTEM_LEAVE   = 4;
-  MESSAGE_TYPE_SYSTEM_KILL_NOTICE = 5;
-}
-
 message Message {
-  MessageType type = 1;
-  google.protobuf.Timestamp timestamp = 2;
+  google.protobuf.Timestamp timestamp = 1;
 
   oneof payload {
     ChatBroadcastMessage chat_broadcast = 10;
-    ChatPrivateMessage   chat_private   = 11;
-    SystemJoinMessage    system_join    = 12;
-    SystemLeaveMessage   system_leave   = 13;
+    ChatPrivateMessage   chat_private = 11;
+    SystemJoinMessage    system_join = 12;
+    SystemLeaveMessage   system_leave = 13;
     SystemKillNotice     system_kill_notice = 14;
   }
 }
@@ -33,7 +23,7 @@ message ChatBroadcastMessage {
 
 message ChatPrivateMessage {
   uint64 from_id = 1;
-  uint64 to_id   = 2;
+  uint64 to_id = 2;
   bytes  message = 3;
 }
 

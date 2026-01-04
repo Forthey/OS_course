@@ -7,5 +7,8 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
+include(${CMAKE_SOURCE_DIR}/deps/protobuf.cmake)
+
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/source/lib)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/source/host)
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/source/client)

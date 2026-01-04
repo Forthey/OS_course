@@ -3,11 +3,11 @@
 
 #include "Conn.h"
 
-class ConnMq : public Conn {
+class Conn_Mq : public Conn {
 public:
-    ConnMq(bool isHost, std::string inQueueName, std::string outQueueName, std::uint64_t connId, size_t messageSize);
+    Conn_Mq(bool isHost, std::uint64_t connId, std::string inQueueName, std::string outQueueName);
 
-    ~ConnMq() override;
+    ~Conn_Mq() override;
 
     std::expected<BufferType, ConnReadError> read() override;
 
@@ -17,10 +17,9 @@ public:
 
 private:
     bool m_isHost;
+    std::uint64_t m_connId;
     std::string m_inQueueName;
     std::string m_outQueueName;
     mqd_t m_inQueue;
     mqd_t m_outQueue;
-    std::uint64_t m_connId;
-    std::size_t m_messageSize;
 };

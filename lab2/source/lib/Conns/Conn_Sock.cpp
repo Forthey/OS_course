@@ -7,47 +7,101 @@
 
 #include <cerrno>
 #include <cstring>
+#include <iostream>
 #include <system_error>
 
-Conn_Sock::Conn_Sock(const std::string& socketPath, int connId) : m_connId{connId} {
-    m_sockFd = socket(AF_UNIX, SOCK_STREAM, 0);
-    if (m_sockFd < 0) {
-        throw std::runtime_error("socket(AF_UNIX, SOCK_STREAM) failed");
-    }
-
+Conn_Sock::Conn_Sock(bool isHost, int connId, std::string socketPath)
+    : m_isHost{isHost}
+    , m_connId{connId}
+    , m_socketPath{std::move(socketPath)} {
     sockaddr_un addr{};
     addr.sun_family = AF_UNIX;
 
-    if (socketPath.size() >= sizeof(addr.sun_path)) {
-        close(m_sockFd);
+    if (m_socketPath.size() >= sizeof(addr.sun_path)) {
         throw std::runtime_error("UNIX socket path is too long");
     }
 
-    std::strncpy(addr.sun_path, socketPath.c_str(), sizeof(addr.sun_path) - 1);
+    std::strncpy(addr.sun_path, m_socketPath.c_str(), sizeof(addr.sun_path) - 1);
 
-    const auto len = static_cast<socklen_t>(offsetof(sockaddr_un, sun_path) + socketPath.size() + 1);
+    const auto len = static_cast<socklen_t>(offsetof(sockaddr_un, sun_path) + m_socketPath.size() + 1);
 
-    if (connect(m_sockFd, reinterpret_cast<sockaddr*>(&addr), len) < 0) {
-        const int savedErrno = errno;
-        close(m_sockFd);
-        throw std::system_error(savedErrno, std::generic_category(), "connect() failed");
-    }
+    if (isHost) {
+        m_listenFd = ::socket(AF_UNIX, SOCK_STREAM, 0);
+        if (m_listenFd < 0) {
+            throw std::system_error(errno, std::generic_category(), "socket(AF_UNIX, SOCK_STREAM) failed");
+        }
 
-    int flags = fcntl(m_sockFd, F_GETFL, 0);
-    if (flags == -1 || ::fcntl(m_sockFd, F_SETFL, flags | O_NONBLOCK) == -1) {
-        int saved = errno;
-        close(m_sockFd);
-        throw std::system_error(saved, std::generic_category(), "fcntl(O_NONBLOCK) failed");
+        ::unlink(m_socketPath.c_str());  // старый файл сокета не должен мешать
+
+        if (::bind(m_listenFd, reinterpret_cast<sockaddr*>(&addr), len) < 0) {
+            int e = errno;
+            ::close(m_listenFd);
+            m_listenFd = -1;
+            throw std::system_error(e, std::generic_category(), "bind() failed");
+        }
+
+        if (::listen(m_listenFd, SOMAXCONN) < 0) {
+            int e = errno;
+            ::close(m_listenFd);
+            m_listenFd = -1;
+            throw std::system_error(e, std::generic_category(), "listen() failed");
+        }
+
+        int flags = ::fcntl(m_listenFd, F_GETFL, 0);
+        if (flags == -1 || ::fcntl(m_listenFd, F_SETFL, flags | O_NONBLOCK) == -1) {
+            int e = errno;
+            ::close(m_listenFd);
+            m_listenFd = -1;
+            throw std::system_error(e, std::generic_category(), "fcntl(O_NONBLOCK) on listenFd failed");
+        }
+
+        m_sockFd = -1;
+    } else {
+        int fd = ::socket(AF_UNIX, SOCK_STREAM, 0);
+        if (fd < 0) {
+            throw std::system_error(errno, std::generic_category(), "socket(AF_UNIX, SOCK_STREAM) failed");
+        }
+
+        if (::connect(fd, reinterpret_cast<sockaddr*>(&addr), len) < 0) {
+            int e = errno;
+            ::close(fd);
+            throw std::system_error(e, std::generic_category(), "connect() failed");
+        }
+
+        int flags = ::fcntl(fd, F_GETFL, 0);
+        if (flags == -1 || ::fcntl(fd, F_SETFL, flags | O_NONBLOCK) == -1) {
+            int e = errno;
+            ::close(fd);
+            throw std::system_error(e, std::generic_category(), "fcntl(O_NONBLOCK) failed");
+        }
+
+        m_sockFd = fd;
+        m_listenFd = -1;
     }
 }
 
 Conn_Sock::~Conn_Sock() {
+    std::cout << "Closing socket connection for id " << m_connId << std::endl;
     if (m_sockFd >= 0) {
-        close(m_sockFd);
+        ::close(m_sockFd);
+    }
+    if (m_listenFd >= 0) {
+        ::close(m_listenFd);
+    }
+    if (m_isHost && !m_socketPath.empty()) {
+        ::unlink(m_socketPath.c_str());
     }
 }
 
 std::expected<BufferType, ConnReadError> Conn_Sock::read() {
+    if (!tryAccept()) {
+        return std::unexpected{ConnReadError::NoData};
+    }
+
+    if (m_sockFd < 0) {
+        return std::unexpected{ConnReadError::TryReadError};
+    }
+
     if (!m_readInProgress) {
         m_readInProgress = true;
         m_headerDone = 0;
@@ -125,8 +179,36 @@ std::expected<BufferType, ConnReadError> Conn_Sock::read() {
 }
 
 ConnWriteResult Conn_Sock::write(const BufferType& buffer) {
-    const char* rawData = static_cast<const char*>(buffer.data());
-    std::size_t left = buffer.size();
+    if (!tryAccept()) {
+        return ConnWriteResult::TemporaryNotReady;
+    }
+
+    if (m_sockFd < 0) {
+        return ConnWriteResult::WriteError;
+    }
+
+    const std::size_t payloadSize = buffer.size();
+    if (payloadSize == 0) {
+        return ConnWriteResult::Success;
+    }
+
+    if (payloadSize > bufferMaxSize) {
+        return ConnWriteResult::WriteError;
+    }
+
+    uint32_t lenNet = htonl(static_cast<uint32_t>(payloadSize));
+
+    BufferType out;
+    out.resize(sizeof(lenNet) + payloadSize);
+
+    char* outData = static_cast<char*>(out.data());
+    std::memcpy(outData, &lenNet, sizeof(lenNet));
+    std::memcpy(outData + sizeof(lenNet),
+                buffer.data(),
+                payloadSize);
+
+    const char* rawData = outData;
+    std::size_t left = out.size();
 
     while (left > 0) {
         ssize_t writtenNumber = ::send(m_sockFd, rawData, left, 0);
@@ -147,4 +229,32 @@ ConnWriteResult Conn_Sock::write(const BufferType& buffer) {
     }
 
     return ConnWriteResult::Success;
+}
+
+bool Conn_Sock::tryAccept() {
+    if (!m_isHost) {
+        return true;
+    }
+    if (m_sockFd >= 0) {
+        return true;
+    }
+    if (m_listenFd < 0) {
+        return false;
+    }
+
+    int fd = ::accept4(m_listenFd, nullptr, nullptr, SOCK_NONBLOCK);
+    if (fd < 0) {
+        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+            return false;
+        }
+        throw std::system_error(errno, std::generic_category(), "accept() failed");
+    }
+
+    std::cout << "Socket connected to id " << m_connId << std::endl;
+
+    ::close(m_listenFd);
+    m_listenFd = -1;
+    m_sockFd = fd;
+
+    return true;
 }
