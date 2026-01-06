@@ -5,11 +5,8 @@
 #include <cstdio>
 #include <cstring>
 
-#include "ISignalHandler.h"
-
 namespace {
-
-std::atomic<ISignalHandler*> g_registry[NSIG];
+std::atomic<SignalHandler*> SignalRegistry[NSIG];
 
 void commonTrampoline(int signo, siginfo_t* info, void* ctx) {
     (void)ctx;
@@ -18,24 +15,23 @@ void commonTrampoline(int signo, siginfo_t* info, void* ctx) {
         return;
     }
 
-    ISignalHandler* handler = g_registry[signo].load(std::memory_order_acquire);
+    SignalHandler* handler = SignalRegistry[signo];
     if (!handler) {
         return;
     }
 
     handler->onRawSignal(info->si_pid, info->si_value.sival_int);
 }
-
 }  // namespace
 
 namespace SignalUtils {
 
-void installHandler(int signo, ISignalHandler* handler) {
+void installHandler(int signo, SignalHandler* handler) {
     if (signo <= 0 || signo >= NSIG) {
         return;
     }
 
-    g_registry[signo].store(handler, std::memory_order_release);
+    SignalRegistry[signo] = handler;
 
     struct sigaction sa;
     std::memset(&sa, 0, sizeof(sa));
@@ -49,15 +45,15 @@ void installHandler(int signo, ISignalHandler* handler) {
     }
 }
 
-void uninstallHandler(int signo, ISignalHandler* handler) {
+void uninstallHandler(int signo, SignalHandler* handler) {
     if (signo <= 0 || signo >= NSIG) {
         return;
     }
 
-    ISignalHandler* current = g_registry[signo].load(std::memory_order_acquire);
+    SignalHandler* current = SignalRegistry[signo];
 
     if (current == handler) {
-        g_registry[signo].store(nullptr, std::memory_order_release);
+        SignalRegistry[signo] = nullptr;
     }
 }
 

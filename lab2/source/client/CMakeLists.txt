@@ -4,7 +4,7 @@ file(GLOB_RECURSE PROJECT_CLIENT_SOURCE_FILES CONFIGURE_DEPENDS
 
 set(CLIENT_VARIANTS mq fifo socket)
 
-foreach(VARIANT IN LISTS CLIENT_VARIANTS)
+foreach (VARIANT IN LISTS CLIENT_VARIANTS)
     add_executable(client_${VARIANT} ${PROJECT_CLIENT_SOURCE_FILES})
 
     target_link_libraries(client_${VARIANT} PRIVATE lib_${PROJECT_NAME})
@@ -17,4 +17,4 @@ foreach(VARIANT IN LISTS CLIENT_VARIANTS)
 
     string(TOUPPER "${VARIANT}" VARIANT_UPPER)
     target_compile_definitions(client_${VARIANT} PRIVATE CLIENT_CONN_${VARIANT_UPPER})
-endforeach()
+endforeach ()

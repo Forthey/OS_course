@@ -23,8 +23,8 @@ void SingleSignalHandler::poll() {
     }
 }
 
-void SingleSignalHandler::onRawSignal(pid_t pid, int value) {
-    m_lastPid.store(pid, std::memory_order_release);
-    m_lastValue.store(value, std::memory_order_release);
-    m_hasEvent.store(true, std::memory_order_release);
+void SingleSignalHandler::onRawSignal(pid_t pid, int data) {
+    m_lastPid = pid;
+    m_lastValue = data;
+    m_hasEvent = true;
 }

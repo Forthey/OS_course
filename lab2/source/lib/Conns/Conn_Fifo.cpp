@@ -6,6 +6,8 @@
 
 #include <iostream>
 
+#include "Types/Console.h"
+
 Conn_Fifo::Conn_Fifo(bool isHost, int connId, std::string fifoReadPath, std::string fifoWritePath)
     : m_isHost{isHost}
     , m_connId{connId}
@@ -54,7 +56,7 @@ Conn_Fifo::~Conn_Fifo() {
     }
 
     if (m_isHost) {
-        std::cout << "Closing Fifo connection for id " << m_connId << std::endl;
+        consoleSrv().system(std::format("Closing Fifo connection for id {}", m_connId));
         unlink(m_fifoReadPath.c_str());
         unlink(m_fifoWritePath.c_str());
     }

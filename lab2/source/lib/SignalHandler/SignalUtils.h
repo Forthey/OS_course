@@ -1,13 +1,11 @@
 #pragma once
-#include "Types.h"
-
-class ISignalHandler;
+#include "Types/Conn.h"
+#include "Types/SignalHandler.h"
 
 namespace SignalUtils {
+void installHandler(int signo, SignalHandler* handler);
 
-void installHandler(int signo, ISignalHandler* handler);
-
-void uninstallHandler(int signo, ISignalHandler* handler);
+void uninstallHandler(int signo, SignalHandler* handler);
 
 void sendUsr1(pid_t pid, ClientConnType connType);
 

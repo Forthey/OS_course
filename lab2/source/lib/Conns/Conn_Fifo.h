@@ -1,5 +1,8 @@
 #pragma once
-#include "Conn.h"
+#include "Types/Conn.h"
+
+static inline constexpr auto FIFO_TO_HOST_CHANNEL_BASE = "conn_fifo_c2h";
+static inline constexpr auto FIFO_TO_CLIENT_CHANNEL_BASE = "conn_fifo_h2c";
 
 class Conn_Fifo : public Conn {
 public:

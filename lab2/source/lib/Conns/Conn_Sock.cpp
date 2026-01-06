@@ -10,6 +10,8 @@
 #include <iostream>
 #include <system_error>
 
+#include "Types/Console.h"
+
 Conn_Sock::Conn_Sock(bool isHost, int connId, std::string socketPath)
     : m_isHost{isHost}
     , m_connId{connId}
@@ -81,7 +83,7 @@ Conn_Sock::Conn_Sock(bool isHost, int connId, std::string socketPath)
 }
 
 Conn_Sock::~Conn_Sock() {
-    std::cout << "Closing socket connection for id " << m_connId << std::endl;
+    consoleSrv().system(std::format("Closing socket connection for id {}", m_connId));
     if (m_sockFd >= 0) {
         ::close(m_sockFd);
     }
@@ -203,9 +205,7 @@ ConnWriteResult Conn_Sock::write(const BufferType& buffer) {
 
     char* outData = static_cast<char*>(out.data());
     std::memcpy(outData, &lenNet, sizeof(lenNet));
-    std::memcpy(outData + sizeof(lenNet),
-                buffer.data(),
-                payloadSize);
+    std::memcpy(outData + sizeof(lenNet), buffer.data(), payloadSize);
 
     const char* rawData = outData;
     std::size_t left = out.size();
@@ -250,7 +250,7 @@ bool Conn_Sock::tryAccept() {
         throw std::system_error(errno, std::generic_category(), "accept() failed");
     }
 
-    std::cout << "Socket connected to id " << m_connId << std::endl;
+    consoleSrv().system(std::format("Socket connected to id {}", m_connId));
 
     ::close(m_listenFd);
     m_listenFd = -1;

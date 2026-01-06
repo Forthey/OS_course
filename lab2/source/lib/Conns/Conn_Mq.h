@@ -1,7 +1,10 @@
 #pragma once
 #include <mqueue.h>
 
-#include "Conn.h"
+#include "Types/Conn.h"
+
+static inline constexpr auto MQ_TO_HOST_CHANNEL_BASE = "/conn_mq_c2h";
+static inline constexpr auto MQ_TO_CLIENT_CHANNEL_BASE = "/conn_mq_h2c";
 
 class Conn_Mq : public Conn {
 public:

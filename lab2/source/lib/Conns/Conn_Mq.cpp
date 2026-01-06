@@ -6,6 +6,8 @@
 #include <iostream>
 #include <system_error>
 
+#include "Types/Console.h"
+
 Conn_Mq::Conn_Mq(bool isHost, std::uint64_t connId, std::string inQueueName, std::string outQueueName)
     : m_isHost{isHost}
     , m_connId{connId}
@@ -15,7 +17,6 @@ Conn_Mq::Conn_Mq(bool isHost, std::uint64_t connId, std::string inQueueName, std
     attr.mq_maxmsg = 10;
     attr.mq_msgsize = bufferMaxSize;
 
-    // Открываем входную очередь в неблокирующем режиме
     m_inQueue = mq_open(m_inQueueName.c_str(), O_CREAT | O_RDONLY | O_NONBLOCK, 0666, &attr);
     if (m_inQueue == static_cast<mqd_t>(-1)) {
         int saved = errno;
@@ -26,7 +27,6 @@ Conn_Mq::Conn_Mq(bool isHost, std::uint64_t connId, std::string inQueueName, std
         throw std::system_error(saved, std::generic_category(), "mq_open(in) failed");
     }
 
-    // Открываем выходную очередь в неблокирующем режиме
     m_outQueue = mq_open(m_outQueueName.c_str(), O_CREAT | O_WRONLY | O_NONBLOCK, 0666, &attr);
     if (m_outQueue == static_cast<mqd_t>(-1)) {
         int saved = errno;
@@ -40,14 +40,14 @@ Conn_Mq::Conn_Mq(bool isHost, std::uint64_t connId, std::string inQueueName, std
 }
 
 Conn_Mq::~Conn_Mq() {
-    if (m_inQueue != static_cast<mqd_t>(-1)) {
+    if (m_inQueue != -1) {
         mq_close(m_inQueue);
     }
-    if (m_outQueue != static_cast<mqd_t>(-1)) {
+    if (m_outQueue != -1) {
         mq_close(m_outQueue);
     }
     if (m_isHost) {
-        std::cout << "Closing Message Queue connection for id " << m_connId << std::endl;
+        consoleSrv().system(std::format("Closing Message Queue connection for id {}", m_connId));
         mq_unlink(m_inQueueName.c_str());
         mq_unlink(m_outQueueName.c_str());
     }
@@ -75,7 +75,7 @@ std::expected<BufferType, ConnReadError> Conn_Mq::read() {
 }
 
 ConnWriteResult Conn_Mq::write(const BufferType& buffer) {
-    const int rc = mq_send(m_outQueue, static_cast<const char*>(buffer.data()), buffer.size(), 0);
+    const int rc = mq_send(m_outQueue, buffer.data(), buffer.size(), 0);
 
     if (rc == -1) {
         if (errno == EAGAIN || errno == EWOULDBLOCK) {

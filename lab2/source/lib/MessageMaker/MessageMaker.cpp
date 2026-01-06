@@ -23,7 +23,7 @@ chat::Message makeBaseMessage() {
 }
 }  // namespace
 
-chat::Message MessageMaker::makeBroadcast(std::uint64_t fromId, const std::string& text) {
+chat::Message MessageMaker::makeBroadcast(std::uint64_t fromId, std::string_view text) {
     auto msg = makeBaseMessage();
 
     auto* payload = msg.mutable_chat_broadcast();
@@ -33,7 +33,7 @@ chat::Message MessageMaker::makeBroadcast(std::uint64_t fromId, const std::strin
     return msg;
 }
 
-chat::Message MessageMaker::makePrivate(std::uint64_t fromId, uint64_t toId, const std::string& text) {
+chat::Message MessageMaker::makePrivate(std::uint64_t fromId, uint64_t toId, std::string_view text) {
     auto msg = makeBaseMessage();
 
     auto* payload = msg.mutable_chat_private();

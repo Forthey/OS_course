@@ -2,46 +2,45 @@
 
 #include "SignalUtils.h"
 
-MultiSignalHandler::MultiSignalHandler(int signo, Callback callback, std::size_t queueSize)
-    : m_signo(signo)
+MultiSignalHandler::MultiSignalHandler(int signal, Callback callback, std::size_t queueSize)
+    : m_signal(signal)
     , m_callback(std::move(callback))
     , m_capacity(queueSize)
     , m_queue(nullptr) {
     m_queue = new Event[m_capacity];
 
-    SignalUtils::installHandler(m_signo, this);
+    SignalUtils::installHandler(m_signal, this);
 }
 
 MultiSignalHandler::~MultiSignalHandler() {
-    SignalUtils::uninstallHandler(m_signo, this);
+    SignalUtils::uninstallHandler(m_signal, this);
     delete[] m_queue;
 }
 
 void MultiSignalHandler::poll() {
-    std::size_t head = m_head.load(std::memory_order_relaxed);
-    std::size_t tail = m_tail.load(std::memory_order_acquire);
+    std::size_t head = m_head;
+    const std::size_t tail = m_tail;
 
     while (head != tail) {
-        Event ev = m_queue[head];
+        const auto event = m_queue[head];
         head = (head + 1) % m_capacity;
-        m_head.store(head, std::memory_order_release);
+        m_head = head;
 
         if (m_callback) {
-            m_callback(ev.pid, ev.value);
+            m_callback(event.pid, event.value);
         }
     }
 }
 
-void MultiSignalHandler::onRawSignal(pid_t pid, int value) {
-    std::size_t tail = m_tail.load(std::memory_order_relaxed);
-    std::size_t next = (tail + 1) % m_capacity;
+void MultiSignalHandler::onRawSignal(pid_t pid, int data) {
+    const std::size_t tail = m_tail;
+    const std::size_t next = (tail + 1) % m_capacity;
 
-    std::size_t head = m_head.load(std::memory_order_acquire);
-    if (next == head) {
+    if (next == m_head) {
         // очередь полна - дропаем сигнал
         return;
     }
 
-    m_queue[tail] = Event{pid, value};
-    m_tail.store(next, std::memory_order_release);
+    m_queue[tail] = Event{pid, data};
+    m_tail = next;
 }

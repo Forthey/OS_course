@@ -2,15 +2,15 @@
 
 #include <atomic>
 
-#include "ISignalHandler.h"
+#include "Types/SignalHandler.h"
 
-class SingleSignalHandler : public ISignalHandler {
+class SingleSignalHandler : public SignalHandler {
 public:
     explicit SingleSignalHandler(int signo, Callback callback);
     ~SingleSignalHandler() override;
 
     void poll() override;
-    void onRawSignal(pid_t pid, int value) override;
+    void onRawSignal(pid_t pid, int data) override;
 
 private:
     int m_signo;

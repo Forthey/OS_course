@@ -3,7 +3,9 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
-#include "Conn.h"
+#include "Types/Conn.h"
+
+static inline constexpr auto SOCKET_CHANNEL_BASE = "conn_socket";
 
 class Conn_Sock : public Conn {
 public:

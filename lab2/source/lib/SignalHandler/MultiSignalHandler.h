@@ -3,28 +3,28 @@
 #include <atomic>
 #include <cstddef>
 
-#include "ISignalHandler.h"
+#include "Types/SignalHandler.h"
 
-class MultiSignalHandler : public ISignalHandler {
+class MultiSignalHandler : public SignalHandler {
 public:
     struct Event {
         pid_t pid;
         int value;
     };
 
-    MultiSignalHandler(int signo, Callback callback, std::size_t queueSize = 1024);
+    MultiSignalHandler(int signal, Callback callback, std::size_t queueSize = 1024);
     ~MultiSignalHandler() override;
 
     void poll() override;
-    void onRawSignal(pid_t pid, int value) override;
+    void onRawSignal(pid_t pid, int data) override;
 
 private:
-    int m_signo;
+    int m_signal;
     Callback m_callback;
 
     const std::size_t m_capacity;
     Event* m_queue;
 
-    std::atomic<std::size_t> m_head{0};  // читает poll()
-    std::atomic<std::size_t> m_tail{0};  // пишет handler
+    std::atomic<std::size_t> m_head{0};
+    std::atomic<std::size_t> m_tail{0};
 };

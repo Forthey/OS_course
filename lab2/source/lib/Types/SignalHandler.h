@@ -6,11 +6,11 @@
 
 #include <functional>
 
-class ISignalHandler {
+class SignalHandler {
 public:
     using Callback = std::function<void(pid_t, int)>;
 
-    virtual ~ISignalHandler() = default;
+    virtual ~SignalHandler() = default;
 
     virtual void poll() = 0;
 
