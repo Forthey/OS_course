@@ -74,11 +74,11 @@ ChatClientServer::Impl::Impl(pid_t serverPid)
 
 void ChatClientServer::Impl::serve() {
 #ifdef CLIENT_CONN_MQ
-    ClientConnType type{ClientConnType::MessageQueue};
+    const auto type{ClientConnType::MessageQueue};
 #elifdef CLIENT_CONN_FIFO
-    ClientConnType type{ClientConnType::Fifo};
-#elifdef CLIENT_CONN_SOCKET
-    ClientConnType type{ClientConnType::Socket};
+    const auto type{ClientConnType::Fifo};
+#elifdef CLIENT_CONN_SOCK
+    const auto type{ClientConnType::Socket};
 #endif
 
     switch (type) {

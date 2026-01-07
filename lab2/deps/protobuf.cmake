@@ -1,3 +1,11 @@
+message("Find Protobuf")
+find_package(protobuf)
+
+if (protobuf_FOUND)
+    message("Protobuf found")
+    return()
+endif ()
+
 message("Installing Protobuf...")
 set(protobuf_BUILD_TESTS OFF CACHE BOOL "Disable protobuf tests" FORCE)
 set(protobuf_BUILD_CONFORMANCE OFF CACHE BOOL "Disable protobuf conformance tests" FORCE)
@@ -10,7 +18,7 @@ include(FetchContent)
 FetchContent_Declare(
         protobuf
         GIT_REPOSITORY https://github.com/protocolbuffers/protobuf.git
-        GIT_TAG        v33.2
+        GIT_TAG v33.2
 )
 
 FetchContent_MakeAvailable(protobuf)

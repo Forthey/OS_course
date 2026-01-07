@@ -15,7 +15,6 @@ target_include_directories(messages_proto
         PUBLIC
         ${CMAKE_CURRENT_BINARY_DIR}
         ${PROTO_DIR}
-        ${protobuf_SOURCE_DIR}/src
 )
 
 protobuf_generate(
@@ -23,7 +22,7 @@ protobuf_generate(
         LANGUAGE cpp
         APPEND_PATH
         PROTOS ${PROTO_FILES}
-        IMPORT_DIRS ${PROTO_DIR} ${protobuf_SOURCE_DIR}/src
+        IMPORT_DIRS ${PROTO_DIR}
 )
 
 add_library(lib_${PROJECT_NAME} STATIC ${PROJECT_SOURCE_FILES})
