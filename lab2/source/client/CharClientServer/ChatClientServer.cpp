@@ -13,7 +13,7 @@
 #include "Conns/Conn_Mq.h"
 #elifdef CLIENT_CONN_FIFO
 #include "Conns/Conn_Fifo.h"
-#elifdef CLIENT_CONN_SOCKET
+#elifdef CLIENT_CONN_SOCK
 #include "Conns/Conn_Sock.h"
 #endif
 
@@ -153,9 +153,8 @@ void ChatClientServer::Impl::onHandshakeConfirm(int id) {
     m_conn = std::make_unique<Conn_Fifo>(false, id,
                                          std::format("{}/{}_{}", std::getenv("HOME"), FIFO_TO_CLIENT_CHANNEL_BASE, id),
                                          std::format("{}/{}_{}", std::getenv("HOME"), FIFO_TO_HOST_CHANNEL_BASE, id));
-#elifdef CLIENT_CONN_SOCKET
-    m_conn =
-        std::make_unique<Conn_Sock>(false, id, std::format("{}/{}_{}", std::getenv("HOME"), SOCKET_CHANNEL_BASE, id));
+#elifdef CLIENT_CONN_SOCK
+    m_conn = std::make_unique<Conn_Sock>(false, id, std::format("{}/{}_{}", std::getenv("HOME"), SOCKET_CHANNEL_BASE, id));
 #endif
 
     m_connectionStatus = ConnectionStatus::Active;

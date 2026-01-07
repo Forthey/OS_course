@@ -17,6 +17,7 @@ public:
 
     void start();
     void stop();
+    void reset();
 
     void update(Duration delta);
 
@@ -26,7 +27,8 @@ private:
     std::atomic<bool> m_running = false;
     Callback m_callback;
 
-    Duration m_duration;
+    std::mutex m_mutex;
+    const Duration m_duration;
     Clock::time_point m_currentTime;
     Clock::time_point m_deadline{};
 };
