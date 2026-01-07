@@ -4,14 +4,44 @@
 
 #include <cctype>
 #include <chrono>
+#include <iostream>
 #include <mutex>
 #include <thread>
+
+static auto* GREEN  = "\033[32m";
+static auto* BLUE   = "\033[34m";
+static auto* YELLOW = "\033[33m";
+static auto* RESET  = "\033[0m";
 
 NcursesConsole::~NcursesConsole() {
     if (m_isRunning.load()) {
         m_isRunning = false;
         endwin();
     }
+
+    if (m_messageHistory.empty()) {
+        return;
+    }
+
+    std::cout << "\nПоследние сообщения\n";
+    for (const auto& [text, color] : m_messageHistory) {
+        switch (color) {
+            case Color::Green:
+                std::cout << GREEN;
+                break;
+            case Color::Blue:
+                std::cout << BLUE;
+                break;
+            case Color::Yellow:
+                std::cout << YELLOW;
+                break;
+            default:
+                break;
+        }
+
+        std::cout << text << RESET << "\n";
+    }
+    std::cout << std::endl;
 }
 
 void NcursesConsole::run(InputHandler handler) {
@@ -63,6 +93,10 @@ void NcursesConsole::run(InputHandler handler) {
 
 void NcursesConsole::log(std::string_view text, Color color) {
     std::unique_lock lock{m_queueMtx};
+    m_messageHistory.emplace_back(std::string{text}, color);
+    if (m_messageHistory.size() > m_historyLimit) {
+        m_messageHistory.pop_front();
+    }
     m_messageQueue.emplace(std::string{text}, color);
 }
 

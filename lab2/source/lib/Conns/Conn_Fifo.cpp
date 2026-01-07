@@ -4,6 +4,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include <filesystem>
 #include <iostream>
 
 #include "Types/Console.h"
@@ -75,8 +76,13 @@ std::expected<BufferType, ConnReadError> Conn_Fifo::read() {
         return std::unexpected{ConnReadError::TryReadError};
     }
 
-    if (readNumber == 0) {
+    if (readNumber == 0 && m_isConnected) {
         return std::unexpected{ConnReadError::Closed};
+    }
+
+    if (!m_isConnected) {
+        consoleSrv().system(std::format("Client connected, id {}", m_connId));
+        m_isConnected = true;
     }
 
     buffer.resize(static_cast<size_t>(readNumber));

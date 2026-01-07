@@ -250,7 +250,7 @@ bool Conn_Sock::tryAccept() {
         throw std::system_error(errno, std::generic_category(), "accept() failed");
     }
 
-    consoleSrv().system(std::format("Socket connected to id {}", m_connId));
+    consoleSrv().system(std::format("Client connected, id {}", m_connId));
 
     ::close(m_listenFd);
     m_listenFd = -1;

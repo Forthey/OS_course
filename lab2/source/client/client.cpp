@@ -11,7 +11,13 @@ int main(int argc, char* argv[]) {
 
     ConsoleSrv::console = std::make_unique<NcursesConsole>();
     ChatClientServer server{std::stoi(argv[1])};
-    server.serve();
+
+    try {
+        server.serve();
+    } catch (std::exception& e) {
+        std::cerr << e.what() << std::endl;
+        return 1;
+    }
 
     return 0;
 }

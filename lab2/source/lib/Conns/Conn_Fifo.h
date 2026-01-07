@@ -1,4 +1,6 @@
 #pragma once
+#include <atomic>
+
 #include "Types/Conn.h"
 
 static inline constexpr auto FIFO_TO_HOST_CHANNEL_BASE = "conn_fifo_c2h";
@@ -23,4 +25,6 @@ private:
     int m_connId;
     std::string m_fifoReadPath;
     std::string m_fifoWritePath;
+
+    std::atomic<bool> m_isConnected{false};
 };

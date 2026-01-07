@@ -67,10 +67,10 @@ void ChatClient::onMessage(const chat::Message& msg) {
             printSystemJoinMessage(timePoint, msg.system_join().client_id());
             break;
         case chat::Message::kSystemLeave:
-            printSystemJoinMessage(timePoint, msg.system_leave().client_id());
+            printSystemLeaveMessage(timePoint, msg.system_leave().client_id());
             break;
         case chat::Message::kSystemKillNotice:
-            printSystemJoinMessage(timePoint, msg.system_kill_notice().client_id());
+            printSystemKillMessage(timePoint, msg.system_kill_notice().client_id());
             break;
         default:
             break;

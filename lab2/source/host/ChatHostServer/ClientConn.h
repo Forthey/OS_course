@@ -11,15 +11,15 @@ public:
     ClientConn(std::uint64_t id, pid_t pid, ClientConnType type) : id{id}, pid{pid} {
         switch (type) {
             case ClientConnType::Fifo:
-                conn = std::make_unique<Conn_Fifo>(true, id, std::format("{}_{}", FIFO_TO_HOST_CHANNEL_BASE, id),
-                                                   std::format("{}_{}", FIFO_TO_CLIENT_CHANNEL_BASE, id));
+                conn = std::make_unique<Conn_Fifo>(true, id, std::format("{}/{}_{}", std::getenv("HOME"), FIFO_TO_HOST_CHANNEL_BASE, id),
+                                                   std::format("{}/{}_{}", std::getenv("HOME"), FIFO_TO_CLIENT_CHANNEL_BASE, id));
                 break;
             case ClientConnType::MessageQueue:
                 conn = std::make_unique<Conn_Mq>(true, id, std::format("{}_{}", MQ_TO_HOST_CHANNEL_BASE, id),
                                                  std::format("{}_{}", MQ_TO_CLIENT_CHANNEL_BASE, id));
                 break;
             case ClientConnType::Socket:
-                conn = std::make_unique<Conn_Sock>(true, id, std::format("{}_{}", SOCKET_CHANNEL_BASE, id));
+                conn = std::make_unique<Conn_Sock>(true, id, std::format("{}/{}_{}", std::getenv("HOME"), SOCKET_CHANNEL_BASE, id));
                 break;
         }
     }

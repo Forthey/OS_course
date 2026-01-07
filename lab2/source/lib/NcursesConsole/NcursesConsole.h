@@ -51,6 +51,8 @@ private:
 
     std::shared_mutex m_queueMtx;
     std::queue<Message> m_messageQueue;
+    std::deque<Message> m_messageHistory;
+    static constexpr std::size_t m_historyLimit = 20;
 
     std::atomic<bool> m_isRunning{false};
 };

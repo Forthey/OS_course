@@ -92,11 +92,14 @@ void ChatHostServer::Impl::runReadLoop() {
                         case ConnReadError::TryReadError:
                         case ConnReadError::Unknown:
                         case ConnReadError::Closed:
-                            sendSystemLeave(clientData.id);
                             m_clientsToDelete.emplace_back(clientData.id);
                             break;
                     }
                 }
+            }
+
+            for (const auto& id : m_clientsToDelete) {
+                sendSystemLeave(id);
             }
         }
         {
@@ -196,6 +199,7 @@ void ChatHostServer::Impl::sendSystemJoin(std::uint64_t clientId) {
 
 void ChatHostServer::Impl::sendSystemLeave(std::uint64_t clientId) {
     const auto msg = MessageMaker::makeSystemLeave(clientId);
+    consoleSrv().info("hii");
     m_chatClient.onMessage(msg);
     broadcastAnyMessage(msg, clientId);
 }
