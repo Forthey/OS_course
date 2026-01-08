@@ -1,0 +1,17 @@
+cmake_minimum_required(VERSION 3.22)
+
+project(local_chat)
+
+set(CMAKE_CXX_STANDARD 23)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+
+include(${CMAKE_SOURCE_DIR}/deps/protobuf.cmake)
+find_package(Curses REQUIRED)
+
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/source/types)
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/source/conns)
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/source/lib)
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/source/client)
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/source/host)

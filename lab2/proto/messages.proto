@@ -1,0 +1,40 @@
+syntax = "proto3";
+
+package chat;
+
+import "google/protobuf/timestamp.proto";
+
+message Message {
+  google.protobuf.Timestamp timestamp = 1;
+
+  oneof payload {
+    ChatBroadcastMessage chat_broadcast = 10;
+    ChatPrivateMessage   chat_private = 11;
+    SystemJoinMessage    system_join = 12;
+    SystemLeaveMessage   system_leave = 13;
+    SystemKillNotice     system_kill_notice = 14;
+  }
+}
+
+message ChatBroadcastMessage {
+  uint64 from_id = 1;
+  bytes  message = 2;
+}
+
+message ChatPrivateMessage {
+  uint64 from_id = 1;
+  uint64 to_id = 2;
+  bytes  message = 3;
+}
+
+message SystemJoinMessage {
+  uint64 client_id = 1;
+}
+
+message SystemLeaveMessage {
+  uint64 client_id = 1;
+}
+
+message SystemKillNotice {
+  uint64 client_id = 1;
+}
