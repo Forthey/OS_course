@@ -1,6 +1,6 @@
 #pragma once
-#include "Types/Conn.h"
-#include "Types/SignalHandler.h"
+#include "Conn.h"
+#include "SignalHandler.h"
 
 namespace SignalUtils {
 void installHandler(int signo, SignalHandler* handler);

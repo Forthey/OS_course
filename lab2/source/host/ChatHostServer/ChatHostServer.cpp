@@ -11,23 +11,26 @@
 
 #include "ChatClient/ChatClient.h"
 #include "ClientConn.h"
+#include "Conn.h"
+#include "Console.h"
 #include "MessageMaker/MessageMaker.h"
 #include "SignalHandler/MultiSignalHandler.h"
 #include "SignalHandler/SignalUtils.h"
-#include "Types/Conn.h"
-#include "Types/Console.h"
+#include "TaskScheduler.h"
 
 class ChatHostServer::Impl {
     using ClientConnPtr = std::shared_ptr<ClientConn>;
 
 public:
     Impl();
+    ~Impl();
 
     void serve();
 
 private:
-    void runReadLoop();
-    void runHealthCheckLoop();
+    void step();
+
+    void processData(const BufferType& data, ClientConnPtr client);
 
     void onHandshakeBegin(pid_t clientPid, int code);
     void onMessage(const chat::Message& msg);
@@ -43,10 +46,9 @@ private:
     void broadcastAnyMessage(const chat::Message& msg, std::uint64_t ignoreId);
     void proxyPrivate(const chat::Message& msg);
 
-    void deleteClient(std::uint64_t clientId);
+    void deleteClient(std::uint64_t clientId, bool isServerSide);
+    void deleteAllClients();
     void pruneDeletedClients();
-
-    std::atomic<bool> m_isRunning{false};
 
     std::atomic<std::uint64_t> m_lastId{0};
 
@@ -54,7 +56,7 @@ private:
     std::unordered_map<std::uint64_t, ClientConnPtr> m_clients;
 
     std::shared_mutex m_clientsToDeleteMtx;
-    std::vector<std::uint64_t> m_clientsToDelete;
+    std::map<std::uint64_t, bool> m_clientsToDelete;
 
     MultiSignalHandler m_multiSignalHandler;
     ChatClient m_chatClient;
@@ -74,55 +76,54 @@ ChatHostServer::Impl::Impl()
           [this] { onSystemLeave(); },
       } {}
 
-void ChatHostServer::Impl::serve() {
-    m_isRunning = true;
-
-    std::jthread inputThread{[this] { m_chatClient.runInteractiveWriting(); }};
-    std::jthread readThread{[this] { runReadLoop(); }};
-    std::jthread healthCheckThread{[this] { runHealthCheckLoop(); }};
+ChatHostServer::Impl::~Impl() {
+    taskSchedulerSrv().stop();
+    sendSystemLeave(0);
 }
 
-void ChatHostServer::Impl::runReadLoop() {
-    while (m_isRunning) {
-        m_multiSignalHandler.poll();
-        {
-            std::shared_lock lock{m_clientsMtx};
-            for (const auto& clientData : m_clients | std::views::values) {
-                if (const auto readResult = clientData->conn->read()) {
-                    chat::Message msg;
-                    if (!msg.ParseFromString(readResult.value())) {
-                        consoleSrv().system("Incorrect message received");
-                    }
-                    clientData->inactiveTimer.reset();
-                    onMessage(msg);
-                } else {
-                    switch (readResult.error()) {
-                        case ConnReadError::NoData:
-                            break;
-                        case ConnReadError::TryReadError:
-                        case ConnReadError::Unknown:
-                        case ConnReadError::Closed:
-                            deleteClient(clientData->id);
-                            break;
-                    }
-                }
+void ChatHostServer::Impl::serve() {
+    taskSchedulerSrv().addStopCallback([] { consoleSrv().stop(); });
+    taskSchedulerSrv().scheduleRepeated([this] { m_chatClient.step(); }, std::chrono::milliseconds{1});
+    taskSchedulerSrv().scheduleRepeated([this] { m_multiSignalHandler.poll(); }, std::chrono::milliseconds{1});
+    taskSchedulerSrv().scheduleRepeated([this] { step(); }, std::chrono::milliseconds{1});
+    taskSchedulerSrv().scheduleRepeated([this] { pruneDeletedClients(); }, std::chrono::milliseconds{500});
+
+    taskSchedulerSrv().wait();
+}
+
+void ChatHostServer::Impl::step() {
+    std::shared_lock lock{m_clientsMtx};
+    for (const auto& client : m_clients | std::views::values) {
+        if (const auto readResult = client->conn->read()) {
+            taskSchedulerSrv().schedule(
+                [this, data = std::move(readResult.value()), client] { processData(data, client); });
+        } else {
+            switch (readResult.error()) {
+                case ConnReadError::NoData:
+                    break;
+                case ConnReadError::TryReadError:
+                case ConnReadError::Unknown:
+                case ConnReadError::Closed:
+                    deleteClient(client->id, false);
+                    break;
             }
         }
-        pruneDeletedClients();
-
-        std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
 }
 
-void ChatHostServer::Impl::runHealthCheckLoop() {
-    while (m_isRunning) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+void ChatHostServer::Impl::processData(const BufferType& data, ClientConnPtr client) {
+    chat::Message msg;
+    if (!msg.ParseFromString(data)) {
+        consoleSrv().system("Incorrect message received");
     }
+    client->inactiveTimer.reset();
+    onMessage(msg);
 }
 
 void ChatHostServer::Impl::onHandshakeBegin(pid_t clientPid, int code) {
     consoleSrv().system(std::format("Initial handshake with {}, connection type {}", clientPid, code));
-    m_lastId = m_lastId + 1;
+
+    auto id = m_lastId.fetch_add(1) + 1;
 
     if (code < 1 || code > 3) {
         // Клиент умрет по таймауту
@@ -131,8 +132,6 @@ void ChatHostServer::Impl::onHandshakeBegin(pid_t clientPid, int code) {
 
     {
         std::unique_lock lock{m_clientsMtx};
-
-        std::uint64_t id = m_lastId;
         ClientConnPtr conn{new ClientConn{
             id,
             clientPid,
@@ -143,9 +142,9 @@ void ChatHostServer::Impl::onHandshakeBegin(pid_t clientPid, int code) {
         m_clients.emplace(id, std::move(conn));
     }
 
-    SignalUtils::sendUsr2(clientPid, m_lastId);
+    SignalUtils::sendUsr2(clientPid, id);
     consoleSrv().system("Initial handshake completed");
-    sendSystemJoin(m_lastId);
+    sendSystemJoin(id);
 }
 
 void ChatHostServer::Impl::onMessage(const chat::Message& msg) {
@@ -164,7 +163,7 @@ void ChatHostServer::Impl::onMessage(const chat::Message& msg) {
             break;
         case chat::Message::kSystemLeave:
             broadcastAnyMessage(msg, msg.system_leave().client_id());
-            deleteClient(msg.system_leave().client_id());
+            deleteClient(msg.system_leave().client_id(), false);
             break;
         default:
             // Клиент не может присылать остальные как серверу
@@ -178,14 +177,13 @@ void ChatHostServer::Impl::onMessage(const chat::Message& msg) {
 
 void ChatHostServer::Impl::onSystemLeave() {
     consoleSrv().info(std::format("Exit requested, shutting down..."));
-    m_chatClient.stopInteractiveWriting();
-    m_isRunning = false;
+    taskSchedulerSrv().stop();
 }
 
 void ChatHostServer::Impl::onClientInactive(std::uint64_t clientId) {
     consoleSrv().system(std::format("Inactive client {}", clientId));
     sendSystemKillNotice(clientId);
-    deleteClient(clientId);
+    deleteClient(clientId, true);
 }
 
 void ChatHostServer::Impl::sendPrivateMessage(std::uint64_t toId, std::string_view text) {
@@ -214,7 +212,6 @@ void ChatHostServer::Impl::sendSystemJoin(std::uint64_t clientId) {
 
 void ChatHostServer::Impl::sendSystemLeave(std::uint64_t clientId) {
     const auto msg = MessageMaker::makeSystemLeave(clientId);
-    consoleSrv().info("hii");
     m_chatClient.onMessage(msg);
     broadcastAnyMessage(msg, clientId);
 }
@@ -252,31 +249,33 @@ void ChatHostServer::Impl::proxyPrivate(const chat::Message& msg) {
     m_clients.at(msg.chat_private().to_id())->conn->write(msg.SerializeAsString());
 }
 
-void ChatHostServer::Impl::deleteClient(std::uint64_t clientId) {
-    {
-        std::shared_lock lock{m_clientsMtx};
-        if (!m_clients.contains(clientId)) {
-            consoleSrv().system(std::format("Trying to delete client {}, which does not exist", clientId));
-            return;
-        }
-        if (kill(m_clients.at(clientId)->pid, SIGKILL) == -1) {
-            consoleSrv().system(std::format("Failed to send SIGKILL to client {}: {}", clientId,
-                                            std::system_category().message(errno)));
-        }
-    }
+void ChatHostServer::Impl::deleteClient(std::uint64_t clientId, bool isServerSide) {
     std::unique_lock lock{m_clientsToDeleteMtx};
-    m_clientsToDelete.emplace_back(clientId);
+    if (!m_clientsToDelete.contains(clientId)) {
+        m_clientsToDelete.emplace(clientId, isServerSide);
+    }
 }
 
 void ChatHostServer::Impl::pruneDeletedClients() {
-    std::unique_lock lock{m_clientsToDeleteMtx};
-    for (const auto& id : m_clientsToDelete) {
-        sendSystemLeave(id);
+    std::map<std::uint64_t, bool> clientsToDelete;
+    {
+        std::unique_lock lock{m_clientsToDeleteMtx};
+        clientsToDelete = std::move(m_clientsToDelete);
+        m_clientsToDelete.clear();
     }
 
-    std::unique_lock lock2{m_clientsMtx};
-    for (auto& id : m_clientsToDelete) {
-        m_clients.erase(id);
+    {
+        std::unique_lock lock{m_clientsMtx};
+        for (auto& [id, isServerSide] : clientsToDelete) {
+            if (!m_clients.contains(id)) {
+                consoleSrv().system(std::format("Trying to delete client {}, which does not exist", id));
+                continue;
+            }
+            if (isServerSide && kill(m_clients.at(id)->pid, SIGKILL) == -1) {
+                consoleSrv().system(
+                    std::format("Failed to send SIGKILL to client {}: {}", id, std::system_category().message(errno)));
+            }
+            m_clients.erase(id);
+        }
     }
-    m_clientsToDelete.clear();
 }

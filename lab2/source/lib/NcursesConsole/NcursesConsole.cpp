@@ -8,16 +8,13 @@
 #include <mutex>
 #include <thread>
 
-static auto* GREEN  = "\033[32m";
-static auto* BLUE   = "\033[34m";
+static auto* GREEN = "\033[32m";
+static auto* BLUE = "\033[34m";
 static auto* YELLOW = "\033[33m";
-static auto* RESET  = "\033[0m";
+static auto* RESET = "\033[0m";
 
 NcursesConsole::~NcursesConsole() {
-    if (m_isRunning.load()) {
-        m_isRunning = false;
-        endwin();
-    }
+    stop();
 
     if (m_messageHistory.empty()) {
         return;
@@ -38,15 +35,12 @@ NcursesConsole::~NcursesConsole() {
             default:
                 break;
         }
-
         std::cout << text << RESET << "\n";
     }
     std::cout << std::endl;
 }
 
-void NcursesConsole::run(InputHandler handler) {
-    m_isRunning = true;
-
+void NcursesConsole::init() {
     setlocale(LC_ALL, "");
 
     initscr();
@@ -58,8 +52,8 @@ void NcursesConsole::run(InputHandler handler) {
     start_color();
     use_default_colors();
 
-    init_pair(1, COLOR_GREEN,  -1);
-    init_pair(2, COLOR_BLUE,   -1);
+    init_pair(1, COLOR_GREEN, -1);
+    init_pair(2, COLOR_BLUE, -1);
     init_pair(3, COLOR_YELLOW, -1);
 
     int rows, cols;
@@ -72,23 +66,44 @@ void NcursesConsole::run(InputHandler handler) {
 
     m_inputWindow = newwin(1, cols, rows - 1, 0);
     nodelay(m_inputWindow, TRUE);
+}
 
-    std::string currentInput;
+void NcursesConsole::start(InputHandler handler) {
+    m_handler = std::move(handler);
+    init();
+}
 
-    while (m_isRunning) {
-        flushMessages();
-        drawInputLine(currentInput);
-
-        if (const int ch = wgetch(m_inputWindow); ch != ERR) {
-            handleKey(ch, currentInput, handler);
-        }
-
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+void NcursesConsole::stop() {
+    if (m_logWindow) {
+        delwin(m_logWindow);
+        m_logWindow = nullptr;
     }
-
-    delwin(m_logWindow);
-    delwin(m_inputWindow);
+    if (m_inputWindow) {
+        delwin(m_inputWindow);
+        m_inputWindow = nullptr;
+    }
     endwin();
+}
+
+void NcursesConsole::step() {
+    flushMessages();
+    drawInputLine();
+
+    if (const int ch = wgetch(m_inputWindow); ch != ERR) {
+        if (ch == '\n' || ch == '\r') {
+            const auto line = m_currentInput;
+            m_currentInput.clear();
+            drawInputLine();
+
+            if (m_handler && !line.empty()) {
+                m_handler(line);
+            }
+        } else if (ch == KEY_BACKSPACE || ch == 127 || ch == 8) {
+            if (!m_currentInput.empty()) m_currentInput.pop_back();
+        } else if (isprint(ch)) {
+            m_currentInput.push_back(static_cast<char>(ch));
+        }
+    }
 }
 
 void NcursesConsole::log(std::string_view text, Color color) {
@@ -99,8 +114,6 @@ void NcursesConsole::log(std::string_view text, Color color) {
     }
     m_messageQueue.emplace(std::string{text}, color);
 }
-
-void NcursesConsole::stop() { m_isRunning = false; }
 
 void NcursesConsole::flushMessages() {
     std::unique_lock lock{m_queueMtx};
@@ -129,25 +142,9 @@ void NcursesConsole::flushMessages() {
     }
 }
 
-void NcursesConsole::drawInputLine(const std::string& currentInput) const {
+void NcursesConsole::drawInputLine() const {
     werase(m_inputWindow);
-    mvwprintw(m_inputWindow, 0, 0, "> %s", currentInput.c_str());
+    mvwprintw(m_inputWindow, 0, 0, "> %s", m_currentInput.c_str());
     wclrtoeol(m_inputWindow);
     wrefresh(m_inputWindow);
-}
-
-void NcursesConsole::handleKey(int ch, std::string& currentInput, const InputHandler& handler) const {
-    if (ch == '\n' || ch == '\r') {
-        std::string line = currentInput;
-        currentInput.clear();
-        drawInputLine(currentInput);
-
-        if (handler && !line.empty()) {
-            handler(line);
-        }
-    } else if (ch == KEY_BACKSPACE || ch == 127 || ch == 8) {
-        if (!currentInput.empty()) currentInput.pop_back();
-    } else if (isprint(ch)) {
-        currentInput.push_back(static_cast<char>(ch));
-    }
 }

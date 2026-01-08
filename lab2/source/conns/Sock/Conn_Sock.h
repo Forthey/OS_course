@@ -1,13 +1,12 @@
 #pragma once
-#include <poll.h>
-#include <sys/socket.h>
-#include <unistd.h>
+#include <atomic>
+#include <mutex>
 
-#include "Types/Conn.h"
+#include "Conn.h"
 
 static inline constexpr auto SOCKET_CHANNEL_BASE = "conn_socket";
 
-class Conn_Sock : public Conn {
+class Conn_Sock final : public Conn {
 public:
     Conn_Sock(bool isHost, int connId, std::string socketPath);
 
@@ -25,14 +24,17 @@ private:
     bool m_isHost;
     int m_connId;
 
-    int m_sockFd;
-    int m_listenFd;
+    std::atomic_int m_sockFd;
+    std::atomic_int m_listenFd;
     std::string m_socketPath;
 
-    bool m_readInProgress{false};
+    std::atomic_bool m_readInProgress{false};
     std::uint32_t m_lengthNetOrder{0};
     std::size_t m_headerDone{0};
     std::uint32_t m_expectedLength{0};
     std::size_t m_bodyDone{0};
     BufferType m_readBuffer;
+
+    std::mutex m_readMtx;
+    std::mutex m_writeMtx;
 };

@@ -9,7 +9,9 @@ public:
 
     virtual ~Console() = default;
 
-    virtual void run(InputHandler handler) = 0;
+    virtual void start(InputHandler handler) = 0;
+
+    virtual void step() = 0;
 
     virtual void info(std::string_view text) = 0;
 

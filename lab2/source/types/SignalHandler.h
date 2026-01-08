@@ -2,8 +2,6 @@
 
 #pragma once
 
-#include <sys/types.h>
-
 #include <functional>
 
 class SignalHandler {

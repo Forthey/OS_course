@@ -1,9 +1,9 @@
 #pragma once
 #include <memory>
 
-#include "Types/Server.h"
+#include "Server.h"
 
-class ChatClientServer : public Server {
+class ChatClientServer final : public Server {
 public:
     explicit ChatClientServer(pid_t serverPid);
 

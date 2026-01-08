@@ -2,23 +2,21 @@
 
 #include <thread>
 
-#include "Types/Console.h"
+#include "Console.h"
 
 ChatClient::ChatClient(SendPrivateMessageCallback sendPrivateMessage, SendBroadcastMessageCallback sendBroadcastMessage,
                        OnSystemLeaveCallback onSystemLeave)
     : m_sendPrivateMessage{std::move(sendPrivateMessage)}
     , m_sendBroadcastMessage{std::move(sendBroadcastMessage)}
-    , m_onSystemLeave{std::move(onSystemLeave)} {}
-
-void ChatClient::runInteractiveWriting() {
-    consoleSrv().run([this](const std::string& text) {
+    , m_onSystemLeave{std::move(onSystemLeave)} {
+    consoleSrv().start([this](const std::string& text) {
         if (!parseTextCommand(text)) {
             consoleSrv().info("Unable to parse text command");
         }
     });
 }
 
-void ChatClient::stopInteractiveWriting() { consoleSrv().stop(); }
+void ChatClient::step() { consoleSrv().step(); }
 
 void ChatClient::printPrivateMessage(std::chrono::system_clock::time_point timePoint, std::uint64_t from,
                                      std::string_view msg) {
@@ -94,7 +92,7 @@ bool ChatClient::parseTextCommand(std::string_view text) {
         return true;
     }
 
-    if (part == "/b" && partsCount == 2) {
+    if (part == "/b" && partsCount >= 2) {
         // text
         ++partsIter;
         const auto tailBegin = (*partsIter).begin();
@@ -105,7 +103,7 @@ bool ChatClient::parseTextCommand(std::string_view text) {
         return true;
     }
 
-    if (part == "/w" && partsCount == 3) {
+    if (part == "/w" && partsCount >= 3) {
         // id
         ++partsIter;
         part = toStringView(*partsIter);

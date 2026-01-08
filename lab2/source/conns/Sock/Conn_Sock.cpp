@@ -7,10 +7,21 @@
 
 #include <cerrno>
 #include <cstring>
-#include <iostream>
 #include <system_error>
 
-#include "Types/Console.h"
+#include "Console.h"
+
+namespace {
+ssize_t readThreadSafe(std::mutex& mtx, int fd, void* data, std::size_t size, int flags) {
+    std::unique_lock lock{mtx};
+    return recv(fd, data, size, flags);
+}
+
+ssize_t writeThreadSafe(std::mutex& mtx, int fd, const void* data, std::size_t size, int flags) {
+    std::unique_lock lock{mtx};
+    return send(fd, data, size, flags);
+}
+}  // namespace
 
 Conn_Sock::Conn_Sock(bool isHost, int connId, std::string socketPath)
     : m_isHost{isHost}
@@ -116,7 +127,8 @@ std::expected<BufferType, ConnReadError> Conn_Sock::read() {
     auto* headerBytes = reinterpret_cast<char*>(&m_lengthNetOrder);
 
     while (m_headerDone < sizeof(m_lengthNetOrder)) {
-        ssize_t n = recv(m_sockFd, headerBytes + m_headerDone, sizeof(m_lengthNetOrder) - m_headerDone, 0);
+        ssize_t n =
+            readThreadSafe(m_readMtx, m_sockFd, headerBytes + m_headerDone, sizeof(m_lengthNetOrder) - m_headerDone, 0);
 
         if (n < 0) {
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
@@ -211,7 +223,7 @@ ConnWriteResult Conn_Sock::write(const BufferType& buffer) {
     std::size_t left = out.size();
 
     while (left > 0) {
-        ssize_t writtenNumber = ::send(m_sockFd, rawData, left, 0);
+        ssize_t writtenNumber = writeThreadSafe(m_writeMtx, m_sockFd, rawData, left, 0);
 
         if (writtenNumber < 0) {
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
@@ -242,7 +254,7 @@ bool Conn_Sock::tryAccept() {
         return false;
     }
 
-    int fd = ::accept4(m_listenFd, nullptr, nullptr, SOCK_NONBLOCK);
+    int fd = accept4(m_listenFd, nullptr, nullptr, SOCK_NONBLOCK);
     if (fd < 0) {
         if (errno == EAGAIN || errno == EWOULDBLOCK) {
             return false;
@@ -252,7 +264,7 @@ bool Conn_Sock::tryAccept() {
 
     consoleSrv().system(std::format("Client connected, id {}", m_connId));
 
-    ::close(m_listenFd);
+    close(m_listenFd);
     m_listenFd = -1;
     m_sockFd = fd;
 

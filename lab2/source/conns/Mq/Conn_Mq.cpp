@@ -3,10 +3,21 @@
 #include <mqueue.h>
 
 #include <cerrno>
-#include <iostream>
 #include <system_error>
 
-#include "Types/Console.h"
+#include "Console.h"
+
+namespace {
+ssize_t readThreadSafe(std::mutex& mtx, mqd_t mq, char* data, std::size_t size) {
+    std::unique_lock lock{mtx};
+    return mq_receive(mq, data, size, nullptr);
+}
+
+ssize_t writeThreadSafe(std::mutex& mtx, mqd_t mq, const char* data, std::size_t size) {
+    std::unique_lock lock{mtx};
+    return mq_send(mq, data, size, 0);
+}
+}  // namespace
 
 Conn_Mq::Conn_Mq(bool isHost, std::uint64_t connId, std::string inQueueName, std::string outQueueName)
     : m_isHost{isHost}
@@ -57,7 +68,7 @@ std::expected<BufferType, ConnReadError> Conn_Mq::read() {
     BufferType buffer;
     buffer.resize(bufferMaxSize);
 
-    const ssize_t readNumber = mq_receive(m_inQueue, static_cast<char*>(buffer.data()), bufferMaxSize, nullptr);
+    const ssize_t readNumber = readThreadSafe(m_readMtx, m_inQueue, static_cast<char*>(buffer.data()), bufferMaxSize);
 
     if (readNumber < 0) {
         if (errno == EAGAIN || errno == EWOULDBLOCK) {
@@ -75,7 +86,7 @@ std::expected<BufferType, ConnReadError> Conn_Mq::read() {
 }
 
 ConnWriteResult Conn_Mq::write(const BufferType& buffer) {
-    const int rc = mq_send(m_outQueue, buffer.data(), buffer.size(), 0);
+    const int rc = writeThreadSafe(m_writeMtx, m_outQueue, buffer.data(), buffer.size());
 
     if (rc == -1) {
         if (errno == EAGAIN || errno == EWOULDBLOCK) {

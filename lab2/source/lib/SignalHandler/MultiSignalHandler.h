@@ -3,9 +3,9 @@
 #include <atomic>
 #include <cstddef>
 
-#include "Types/SignalHandler.h"
+#include "SignalHandler.h"
 
-class MultiSignalHandler : public SignalHandler {
+class MultiSignalHandler final : public SignalHandler {
 public:
     struct Event {
         pid_t pid;

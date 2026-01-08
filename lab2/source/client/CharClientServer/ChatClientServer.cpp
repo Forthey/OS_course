@@ -2,19 +2,19 @@
 
 #include <atomic>
 #include <csignal>
-#include <iostream>
 #include <thread>
 
+#include "Console.h"
 #include "SignalHandler/SingleSignalHandler.h"
+#include "TaskScheduler.h"
 #include "Timer/Timer.h"
-#include "Types/Console.h"
 
 #ifdef CLIENT_CONN_MQ
-#include "Conns/Conn_Mq.h"
+#include "Mq/Conn_Mq.h"
 #elifdef CLIENT_CONN_FIFO
-#include "Conns/Conn_Fifo.h"
+#include "Fifo/Conn_Fifo.h"
 #elifdef CLIENT_CONN_SOCK
-#include "Conns/Conn_Sock.h"
+#include "Sock/Conn_Sock.h"
 #endif
 
 #include "ChatClient/ChatClient.h"
@@ -30,7 +30,9 @@ public:
     void serve();
 
 private:
+    void step();
     void tryRead();
+    void processMessage(const BufferType& buffer);
 
     void onMessage(const chat::Message& msg);
     void onHandshakeConfirm(int id);
@@ -42,7 +44,6 @@ private:
     void sendSystemLeaveMessage() const;
 
     std::uint64_t m_id{};
-    std::atomic<bool> m_isRunning{false};
     std::atomic<ConnectionStatus> m_connectionStatus = ConnectionStatus::Handshake;
     pid_t m_serverPid;
 
@@ -50,8 +51,6 @@ private:
     ChatClient m_chatClient;
     Timer m_timeoutTimer;
     std::unique_ptr<Conn> m_conn;
-
-    std::jthread m_inputThread;
 };
 
 ChatClientServer::ChatClientServer(pid_t serverPid) : m_impl{std::make_unique<Impl>(serverPid)} {}
@@ -94,32 +93,24 @@ void ChatClientServer::Impl::serve() {
     }
     SignalUtils::sendUsr1(m_serverPid, type);
 
-    m_isRunning = true;
+    taskSchedulerSrv().scheduleRepeated([this] { step(); }, std::chrono::milliseconds{1});
+    taskSchedulerSrv().wait();
+}
 
-    while (m_isRunning) {
-        switch (m_connectionStatus.load()) {
-            case ConnectionStatus::Handshake:
-                m_singleSignalHandler.poll();
-                break;
-            case ConnectionStatus::Active:
-                tryRead();
-                break;
-        }
-        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+void ChatClientServer::Impl::step() {
+    switch (m_connectionStatus.load()) {
+        case ConnectionStatus::Handshake:
+            m_singleSignalHandler.poll();
+            break;
+        case ConnectionStatus::Active:
+            tryRead();
+            break;
     }
-
-    m_chatClient.stopInteractiveWriting();
 }
 
 void ChatClientServer::Impl::tryRead() {
     if (const auto readResult = m_conn->read()) {
-        chat::Message msg;
-        if (!msg.ParseFromString(readResult.value())) {
-            consoleSrv().system("Incorrect message received");
-            return;
-        }
-        consoleSrv().system("Received new message");
-        onMessage(msg);
+        taskSchedulerSrv().schedule([this, buffer = std::move(readResult.value())] { processMessage(buffer); });
     } else {
         switch (readResult.error()) {
             case ConnReadError::NoData:
@@ -127,10 +118,20 @@ void ChatClientServer::Impl::tryRead() {
             case ConnReadError::TryReadError:
             case ConnReadError::Unknown:
             case ConnReadError::Closed:
-                m_isRunning = false;
+                taskSchedulerSrv().stop();
                 break;
         }
     }
+}
+
+void ChatClientServer::Impl::processMessage(const BufferType& buffer) {
+    chat::Message msg;
+    if (!msg.ParseFromString(buffer)) {
+        consoleSrv().system("Incorrect message received");
+        return;
+    }
+    consoleSrv().system("Received new message");
+    onMessage(msg);
 }
 
 void ChatClientServer::Impl::onMessage(const chat::Message& msg) {
@@ -138,7 +139,7 @@ void ChatClientServer::Impl::onMessage(const chat::Message& msg) {
 
     if (msg.payload_case() == chat::Message::kSystemLeave && msg.system_leave().client_id() == 0) {
         consoleSrv().info("Server left, shutting down...");
-        m_isRunning = false;
+        taskSchedulerSrv().stop();
     }
 }
 
@@ -154,21 +155,24 @@ void ChatClientServer::Impl::onHandshakeConfirm(int id) {
                                          std::format("{}/{}_{}", std::getenv("HOME"), FIFO_TO_CLIENT_CHANNEL_BASE, id),
                                          std::format("{}/{}_{}", std::getenv("HOME"), FIFO_TO_HOST_CHANNEL_BASE, id));
 #elifdef CLIENT_CONN_SOCK
-    m_conn = std::make_unique<Conn_Sock>(false, id, std::format("{}/{}_{}", std::getenv("HOME"), SOCKET_CHANNEL_BASE, id));
+    m_conn =
+        std::make_unique<Conn_Sock>(false, id, std::format("{}/{}_{}", std::getenv("HOME"), SOCKET_CHANNEL_BASE, id));
 #endif
 
     m_connectionStatus = ConnectionStatus::Active;
-    m_inputThread = std::jthread([this]() { m_chatClient.runInteractiveWriting(); });
+
+    taskSchedulerSrv().scheduleRepeated([this] { m_chatClient.step(); }, std::chrono::milliseconds{1});
+    taskSchedulerSrv().addStopCallback([] { consoleSrv().stop(); });
 }
 
 void ChatClientServer::Impl::onHandshakeTimeout() {
     consoleSrv().info("Handshake timeout, exiting");
-    m_isRunning = false;
+    taskSchedulerSrv().stop();
 }
 
 void ChatClientServer::Impl::onSystemLeave() {
     sendSystemLeaveMessage();
-    m_isRunning = false;
+    taskSchedulerSrv().stop();
 }
 
 void ChatClientServer::Impl::sendPrivateMessage(std::uint64_t toId, std::string_view text) const {

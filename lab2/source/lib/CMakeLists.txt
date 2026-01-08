@@ -1,3 +1,4 @@
+message("Configuring main lib")
 file(GLOB_RECURSE PROJECT_SOURCE_FILES CONFIGURE_DEPENDS
         ${CMAKE_CURRENT_SOURCE_DIR}/*.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/*.h)
@@ -27,11 +28,13 @@ protobuf_generate(
 
 add_library(lib_${PROJECT_NAME} STATIC ${PROJECT_SOURCE_FILES})
 
-target_include_directories(lib_${PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CURSES_INCLUDE_DIR})
+target_include_directories(lib_${PROJECT_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
-target_link_libraries(lib_${PROJECT_NAME} PUBLIC messages_proto ${CURSES_LIBRARIES})
+target_link_libraries(lib_${PROJECT_NAME}
+        PUBLIC messages_proto ${CURSES_LIBRARIES} types_${PROJECT_NAME})
 
 target_compile_options(lib_${PROJECT_NAME} PRIVATE
         -Wall
         -Werror
 )
+message("Main lib configure complete")

@@ -5,9 +5,9 @@
 #include <queue>
 #include <shared_mutex>
 
-#include "Types/Console.h"
+#include "Console.h"
 
-class NcursesConsole : public Console {
+class NcursesConsole final : public Console {
     enum class Color {
         Default,
         Green,
@@ -19,10 +19,13 @@ class NcursesConsole : public Console {
         std::string text;
         Color color;
     };
+
 public:
     ~NcursesConsole() override;
 
-    void run(InputHandler handler) override;
+    void start(InputHandler handler) override;
+
+    void step() override;
 
     void info(std::string_view text) override { log(text, Color::Yellow); }
 
@@ -37,11 +40,11 @@ public:
     void stop() override;
 
 private:
+    void init();
+
     void flushMessages();
 
-    void drawInputLine(const std::string& currentInput) const;
-
-    void handleKey(int ch, std::string& currentInput, const InputHandler& handler) const;
+    void drawInputLine() const;
 
     WINDOW* m_logWindow{};
     WINDOW* m_inputWindow{};
@@ -49,10 +52,11 @@ private:
     int m_logHeight{};
     int m_logWidth{};
 
+    std::string m_currentInput;
+    InputHandler m_handler;
+
     std::shared_mutex m_queueMtx;
     std::queue<Message> m_messageQueue;
     std::deque<Message> m_messageHistory;
     static constexpr std::size_t m_historyLimit = 20;
-
-    std::atomic<bool> m_isRunning{false};
 };

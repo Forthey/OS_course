@@ -2,9 +2,9 @@
 #include <chrono>
 #include <memory>
 
-#include "Conns/Conn_Fifo.h"
-#include "Conns/Conn_Mq.h"
-#include "Conns/Conn_Sock.h"
+#include "Fifo/Conn_Fifo.h"
+#include "Mq/Conn_Mq.h"
+#include "Sock/Conn_Sock.h"
 #include "Timer/Timer.h"
 
 class ClientConn {

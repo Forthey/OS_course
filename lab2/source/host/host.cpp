@@ -2,9 +2,16 @@
 
 #include "ChatHostServer/ChatHostServer.h"
 #include "NcursesConsole/NcursesConsole.h"
+#include "TaskScheduler/SimpleTaskScheduler.h"
+
+void init() {
+    ConsoleSrv::console = std::make_unique<NcursesConsole>();
+    TaskSchedulerSrv::taskScheduler = std::make_unique<SimpleTaskScheduler>();
+}
 
 int main() {
-    ConsoleSrv::console = std::make_unique<NcursesConsole>();
+    init();
+
     ChatHostServer server;
     try {
         server.serve();

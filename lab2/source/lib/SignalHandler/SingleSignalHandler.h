@@ -2,9 +2,9 @@
 
 #include <atomic>
 
-#include "Types/SignalHandler.h"
+#include "SignalHandler.h"
 
-class SingleSignalHandler : public SignalHandler {
+class SingleSignalHandler final : public SignalHandler {
 public:
     explicit SingleSignalHandler(int signo, Callback callback);
     ~SingleSignalHandler() override;

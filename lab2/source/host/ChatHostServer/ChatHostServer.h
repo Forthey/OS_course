@@ -1,9 +1,9 @@
 #pragma once
 #include <memory>
 
-#include "Types/Server.h"
+#include "Server.h"
 
-class ChatHostServer : public Server {
+class ChatHostServer final : public Server {
 public:
     ChatHostServer();
     ~ChatHostServer() override;

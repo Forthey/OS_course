@@ -1,4 +1,4 @@
-#include "Conn_Fifo.h"
+#include "Fifo/Conn_Fifo.h"
 
 #include <fcntl.h>
 #include <sys/stat.h>
@@ -6,8 +6,21 @@
 
 #include <filesystem>
 #include <iostream>
+#include <mutex>
 
-#include "Types/Console.h"
+#include "Console.h"
+
+namespace {
+ssize_t readThreadSafe(std::mutex& mtx, int fd, void* data, std::size_t size) {
+    std::unique_lock lock{mtx};
+    return read(fd, data, size);
+}
+
+ssize_t writeThreadSafe(std::mutex& mtx, int fd, const void* data, std::size_t size) {
+    std::unique_lock lock{mtx};
+    return write(fd, data, size);
+}
+}  // namespace
 
 Conn_Fifo::Conn_Fifo(bool isHost, int connId, std::string fifoReadPath, std::string fifoWritePath)
     : m_isHost{isHost}
@@ -67,7 +80,7 @@ std::expected<BufferType, ConnReadError> Conn_Fifo::read() {
     BufferType buffer;
     buffer.resize(bufferMaxSize);
 
-    const ssize_t readNumber = ::read(m_readFd, static_cast<char*>(buffer.data()), bufferMaxSize);
+    const ssize_t readNumber = readThreadSafe(m_readMtx, m_readFd, static_cast<char*>(buffer.data()), bufferMaxSize);
 
     if (readNumber < 0) {
         if (errno == EAGAIN || errno == EWOULDBLOCK) {
@@ -94,7 +107,7 @@ ConnWriteResult Conn_Fifo::write(const BufferType& buffer) {
     size_t left = buffer.size();
 
     while (left > 0) {
-        const ssize_t writtenNumber = ::write(m_writeFd, rawData, left);
+        const ssize_t writtenNumber = writeThreadSafe(m_writeMtx, m_writeFd, rawData, left);
 
         if (writtenNumber < 0) {
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
